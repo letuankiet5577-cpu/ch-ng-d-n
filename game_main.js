@@ -22,6 +22,98 @@
   };
 
   // DOM (mobile)
+  const btnSaveGame  = document.getElementById("btnSaveGame");
+  const btnLoadGame  = document.getElementById("btnLoadGame");
+  const btnClearSave = document.getElementById("btnClearSave");
+  const SAVE_KEY = "save_game_v1";
+
+function buildSaveData(){
+  return {
+    ver: 1,
+    ts: Date.now(),
+    seed: seedInput.value.trim() || "jungle-01",
+    scene,
+    player: { x: player.x, y: player.y, face: player.face },
+    stats: { hp: stats.hp, hunger: stats.hunger, sleep: stats.sleep },
+    env: {
+      time: env.time,
+      weather: env.weather,
+      weatherType: env.weatherType,
+      weatherTimer: env.weatherTimer
+    },
+    caveRef: activeCaveRef ? { territoryId: activeCaveRef.territoryId, ownerName: activeCaveRef.ownerName } : null
+  };
+}
+
+function saveGame(){
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify(buildSaveData()));
+    showToast("Đã lưu game!", 0.8);
+  }catch(_){
+    showToast("Lưu thất bại (bộ nhớ đầy)", 1.0);
+  }
+}
+
+function loadGame(){
+  let raw=null;
+  try{ raw = localStorage.getItem(SAVE_KEY); }catch(_){}
+  if (!raw){ showToast("Chưa có bản lưu", 0.8); return; }
+
+  let data=null;
+  try{ data = JSON.parse(raw); }catch(_){
+    showToast("Bản lưu bị lỗi", 0.9);
+    return;
+  }
+
+  // regen lại map theo seed
+  seedInput.value = data.seed || "jungle-01";
+  generateWorld(seedInput.value);
+  generateCave(seedInput.value);
+
+  // restore env
+  if (data.env){
+    env.time = data.env.time ?? env.time;
+    env.weather = data.env.weather ?? env.weather;
+    env.weatherType = data.env.weatherType ?? env.weatherType;
+    env.weatherTimer = data.env.weatherTimer ?? env.weatherTimer;
+  }
+
+  // restore stats
+  if (data.stats){
+    stats.hp = data.stats.hp ?? stats.hp;
+    stats.hunger = data.stats.hunger ?? stats.hunger;
+    stats.sleep = data.stats.sleep ?? stats.sleep;
+  }
+
+  // restore player
+  if (data.player){
+    player.x = data.player.x ?? player.x;
+    player.y = data.player.y ?? player.y;
+    player.face = data.player.face ?? player.face;
+  }
+
+  // restore scene
+  scene = "world";
+  scenePill.textContent = "Ngoài rừng";
+  miniName.textContent = "Mini Map (Rừng)";
+
+  if (data.scene === "cave" && data.caveRef){
+    // tìm hang đó và vào lại
+    const ref = caveRefs().find(r => r.territoryId === data.caveRef.territoryId);
+    if (ref) enterCave(ref);
+  }
+
+  showToast("Đã tải game!", 0.9);
+}
+
+function clearSave(){
+  try{ localStorage.removeItem(SAVE_KEY); }catch(_){}
+  showToast("Đã xoá bản lưu", 0.8);
+}
+if (btnSaveGame) btnSaveGame.addEventListener("click", saveGame);
+if (btnLoadGame) btnLoadGame.addEventListener("click", loadGame);
+if (btnClearSave) btnClearSave.addEventListener("click", clearSave);
+
   const mobileControls = document.getElementById("mobileControls");
   const joyBase  = document.getElementById("joyBase");
   const joyStick = document.getElementById("joyStick");

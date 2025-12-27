@@ -1045,6 +1045,30 @@ if (nv > 0) {
     else if (p.type === P.BONE) drawBone(p.x,p.y);
     else if (p.type === P.PELT) drawPelt(p.x,p.y);
   }
+   // vẽ hổ chủ hang (khi xâm nhập hang NPC) - trước đây bị đánh nhưng không thấy hổ
+if (typeof caveTigerHost !== "undefined" && caveTigerHost && caveTigerHost.deadT <= 0){
+  // vẽ thân hổ
+  drawTigerStyled(
+    caveTigerHost.x,
+    caveTigerHost.y,
+    caveTigerHost.face || 0,
+    caveTigerHost.palette,
+    caveTigerHost.hitFlashT || 0
+  );
+
+  // nhãn tên khi ở gần
+  const dHost = Math.hypot(player.x - caveTigerHost.x, player.y - caveTigerHost.y);
+  if (dHost < 300){
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.fillRect(caveTigerHost.x-60, caveTigerHost.y-52, 120, 18);
+    ctx.fillStyle = "rgba(255,255,255,.92)";
+    ctx.font = "12px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText(caveTigerHost.name || "Hổ chủ hang", caveTigerHost.x, caveTigerHost.y-39);
+    ctx.restore();
+  }
+}
 
   // vẽ người chơi trong hang
   drawTiger(player.x, player.y, player.face);

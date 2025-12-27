@@ -107,25 +107,57 @@ function advanceClawCombo(){
     showToast("Vồ sẵn sàng! (Chuột trái)", 0.9);
   }
 }
+  // phát hiện thiết bị chạm (để không spam thông báo TAB trên điện thoại)
+function isTouchDevice(){
+  try{
+    if (navigator && typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 0) return true;
+    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return true;
+  }catch(_){}
+  return ("ontouchstart" in window);
+}
+
+function ensureAutoLock(maxD){
+  let tgt = getLockedTarget();
+  if (tgt) return tgt;
+  const cand = pickNearestEnemyToPoint(player.x, player.y, maxD);
+  if (!cand) return null;
+  setLockedTarget(cand.obj, cand.kind);
+  return getLockedTarget();
+}
 
 // chuột trái (tap) => cào chính xác / (đủ combo) => vồ
 function primaryAttackTap(){
-  if (scene !== "world") return;
   if (locked()) return;
 
+  // trong hang: cho phép tấn công hổ chủ hang (không yêu cầu TAB)
+  if (scene === "cave"){
+    useClaw({wide:false});
+    return;
+  }
+
+  if (scene !== "world") return;
+
   if (player.pounceReady){
-    const tgt = getLockedTarget();
+    let tgt = getLockedTarget();
     if (!tgt){
-      showToast("Vồ cần khoá mục tiêu (TAB)", 0.9);
-      return;
+      // điện thoại: tự khoá mục tiêu gần nhất, không spam TAB
+      if (isTouchDevice()){
+        tgt = ensureAutoLock(220);
+        if (!tgt) return;
+      } else {
+        showToast("Vồ cần khoá mục tiêu (TAB)", 0.9);
+        return;
+      }
     }
     player.pounceReady = false;
     player.clawCombo = 0;
     usePounce(true);
     return;
   }
+
   useClaw({wide:false});
 }
+
 
 // giữ chuột trái => cào rộng (bắn 1 lần / lần giữ)
 function updateMouseHoldAttack(nowMs){
@@ -155,10 +187,19 @@ function useClaw(opts={}){
   if (!wide){
     // cào chính xác: chỉ đánh 1 mục tiêu đã khoá
     if (!tgt){
-      showToast("Chưa khoá mục tiêu (TAB)", 0.75);
-      cd.claw = 0.25;
-      return false;
+  if (isTouchDevice()){
+    tgt = ensureAutoLock(170);
+    if (!tgt){
+      cd.claw = 0.12;
+      return false; // im lặng, không toast
     }
+  } else {
+    showToast("Chưa khoá mục tiêu (TAB)", 0.75);
+    cd.claw = 0.25;
+    return false;
+  }
+}
+
 
     const d = Math.hypot(tgt.obj.x - player.x, tgt.obj.y - player.y);
     const range = 62 + (tgt.obj.r||12);

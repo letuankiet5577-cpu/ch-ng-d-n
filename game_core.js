@@ -92,6 +92,41 @@
   function addFxText(x,y, text, life){
     fx.push({type:"text", x,y, text, t:0, life});
   }
+  // particles: spark + blood (đòn đánh đẹp hơn)
+function addFxSpark(x,y, vx,vy, life){
+  fx.push({type:"spark", x,y, vx,vy, t:0, life});
+}
+function addFxBlood(x,y, vx,vy, r, life){
+  fx.push({type:"blood", x,y, vx,vy, r, t:0, life});
+}
+
+// burst hit: tia lửa + máu nhẹ + rung camera
+function addFxHitBurst(x,y, dir, power=1){
+  const p = clamp(power, 0.6, 2.2);
+
+  const nSpark = Math.round(6 + p*7);
+  for (let i=0;i<nSpark;i++){
+    const a = dir + (Math.random()-0.5)*1.25;
+    const sp = (160 + Math.random()*220) * p;
+    addFxSpark(x, y, Math.cos(a)*sp, Math.sin(a)*sp, 0.18 + Math.random()*0.16);
+  }
+
+  const nBlood = Math.round(3 + p*5);
+  for (let i=0;i<nBlood;i++){
+    const a = dir + (Math.random()-0.5)*2.6;
+    const sp = (70 + Math.random()*160) * p;
+    addFxBlood(x, y, Math.cos(a)*sp, Math.sin(a)*sp, 2 + Math.random()*3.5, 0.45 + Math.random()*0.45);
+  }
+
+  addCameraShake(4 + p*5, 0.10 + p*0.07);
+}
+
+// camera shake (global)
+function addCameraShake(mag=8, dur=0.16){
+  cam.shakeMag = Math.max(cam.shakeMag || 0, mag);
+  cam.shakeDur = Math.max(cam.shakeDur || 0, dur);
+  cam.shakeT   = Math.max(cam.shakeT   || 0, dur);
+}
 
   // ===================== Collision =====================
   function collideResolveCircle(px, py, r, map){

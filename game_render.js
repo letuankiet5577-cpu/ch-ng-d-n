@@ -108,6 +108,27 @@
     ctx.beginPath(); ctx.arc(px+s*0.42, py+s*0.38, s*0.16, 0, Math.PI*2); ctx.fill();
     ctx.globalAlpha = 1;
   }
+   // "Bóng cây" dùng cho phần ngoài rìa bản đồ (chỉ nhìn thấy, không tương tác)
+function drawTreeSilhouette(x, y, scale=1, alpha=0.25){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  // tán cây
+  ctx.fillStyle = "rgba(0,0,0,.55)";
+  ctx.beginPath();
+  ctx.arc(0, -18, 14, 0, Math.PI*2);
+  ctx.arc(-10, -12, 11, 0, Math.PI*2);
+  ctx.arc(10, -12, 11, 0, Math.PI*2);
+  ctx.fill();
+
+  // thân
+  ctx.fillStyle = "rgba(0,0,0,.45)";
+  ctx.fillRect(-3, -10, 6, 18);
+
+  ctx.restore();
+}
 
   function drawRock(px, py, s, v){
     ctx.save();
@@ -790,6 +811,76 @@ else drawSquirrel(a);
       ctx.restore();
     }
   }
+    // Sương mù tối ở rìa bản đồ
+function drawWorldEdgeFogOverlay(){
+  if (scene !== "world") return;
+
+  const w = window.innerWidth, h = window.innerHeight;
+  const worldW = world.w*TILE;
+  const worldH = world.h*TILE;
+
+  const edgeDist = {
+    left: player.x,
+    right: worldW - player.x,
+    top: player.y,
+    bottom: worldH - player.y,
+  };
+
+  const threshold = 16*TILE;  // trong phạm vi ~16 ô thì bắt đầu tối
+  const maxA = 0.72;
+
+  function intensity(d){
+    const t = 1 - clamp(d / threshold, 0, 1);
+    return t*t; // mượt hơn
+  }
+
+  const iL = intensity(edgeDist.left);
+  const iR = intensity(edgeDist.right);
+  const iT = intensity(edgeDist.top);
+  const iB = intensity(edgeDist.bottom);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+
+  // left
+  if (iL > 0.001){
+    const span = clamp(w*0.48, 220, 520);
+    const g = ctx.createLinearGradient(0, 0, span, 0);
+    g.addColorStop(0, `rgba(0,0,0,${maxA*iL})`);
+    g.addColorStop(1, `rgba(0,0,0,0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, span, h);
+  }
+  // right
+  if (iR > 0.001){
+    const span = clamp(w*0.48, 220, 520);
+    const g = ctx.createLinearGradient(w, 0, w-span, 0);
+    g.addColorStop(0, `rgba(0,0,0,${maxA*iR})`);
+    g.addColorStop(1, `rgba(0,0,0,0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(w-span, 0, span, h);
+  }
+  // top
+  if (iT > 0.001){
+    const span = clamp(h*0.45, 180, 420);
+    const g = ctx.createLinearGradient(0, 0, 0, span);
+    g.addColorStop(0, `rgba(0,0,0,${maxA*iT})`);
+    g.addColorStop(1, `rgba(0,0,0,0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, span);
+  }
+  // bottom
+  if (iB > 0.001){
+    const span = clamp(h*0.45, 180, 420);
+    const g = ctx.createLinearGradient(0, h, 0, h-span);
+    g.addColorStop(0, `rgba(0,0,0,${maxA*iB})`);
+    g.addColorStop(1, `rgba(0,0,0,0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, h-span, w, span);
+  }
+
+  ctx.restore();
+}
 
   // ===================== Night vision (harder to hunt at night) =====================
   function nightVisionStrength(){
@@ -876,6 +967,37 @@ function drawNightVisionMask(){
         ctx.stroke();
         ctx.restore();
       }
+      if (f.type === "spark"){
+  const px = f.x + (f.vx||0) * f.t;
+  const py = f.y + (f.vy||0) * f.t;
+  const vv = Math.hypot(f.vx||0, f.vy||0) || 1;
+  const dx = (f.vx||0)/vv;
+  const dy = (f.vy||0)/vv;
+
+  ctx.save();
+  ctx.globalAlpha = (1 - p) * 0.95;
+  ctx.strokeStyle = "rgba(255,245,220,.95)";
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(px - dx*10, py - dy*10);
+  ctx.lineTo(px + dx*2,  py + dy*2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+if (f.type === "blood"){
+  const px = f.x + (f.vx||0) * f.t;
+  const py = f.y + (f.vy||0) * f.t;
+
+  ctx.save();
+  ctx.globalAlpha = (1 - p) * 0.55;
+  ctx.fillStyle = "rgba(150,30,25,.95)";
+  ctx.beginPath();
+  ctx.arc(px, py, (f.r||3) * (1 - 0.35*p), 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
 
       if (f.type === "text"){
         ctx.save();
@@ -916,7 +1038,18 @@ function drawNightVisionMask(){
     ctx.save();
     ctx.translate(w/2, h/2);
     ctx.scale(cam.zoom, cam.zoom);
-    ctx.translate(-cam.x, -cam.y);
+    // camera shake
+if (cam.shakeT > 0){
+  cam.shakeT = Math.max(0, cam.shakeT - dt);
+  const k = (cam.shakeDur > 0) ? (cam.shakeT / cam.shakeDur) : 0;
+  cam.shakeX = (Math.random()*2-1) * (cam.shakeMag||0) * k;
+  cam.shakeY = (Math.random()*2-1) * (cam.shakeMag||0) * k;
+  if (cam.shakeT <= 0){
+    cam.shakeMag = 0; cam.shakeDur = 0; cam.shakeX = 0; cam.shakeY = 0;
+  }
+}
+ctx.translate(-cam.x + (cam.shakeX||0), -cam.y + (cam.shakeY||0));
+
 
     const halfW = (w/2)/cam.zoom;
     const halfH = (h/2)/cam.zoom;
@@ -932,6 +1065,19 @@ function drawNightVisionMask(){
         drawWorldTile(tx,ty, world.tiles[i], world.groundVar[i], timeSec);
       }
     }
+    // "Ngoài rìa bản đồ" (bóng cây) – giúp người chơi thấy còn rừng sâu nhưng hiện chưa đi qua được
+if (world.edgeDeco && world.edgeDeco.length){
+  const left = cam.x - halfW - 220;
+  const right = cam.x + halfW + 220;
+  const top = cam.y - halfH - 220;
+  const bottom = cam.y + halfH + 220;
+
+  for (const e of world.edgeDeco){
+    if (e.kind !== "tree") continue;
+    if (e.x < left || e.x > right || e.y < top || e.y > bottom) continue;
+    drawTreeSilhouette(e.x, e.y, e.s, e.a);
+  }
+}
 
     // cave mouths (của bạn + các hổ đực)
     const cavesToDraw = [world.caveMouth, ...(world.otherCaves||[]).map(o=>o.caveMouth)];
@@ -970,8 +1116,8 @@ drawTiger(player.x, player.y, player.face);
     ctx.restore();
 
     drawSkyOverlay();
-drawWeatherOverlay(dt);
-
+    drawWeatherOverlay(dt);
+    drawWorldEdgeFogOverlay();
 // mask đêm: chỉ ngoài rừng + chỉ đêm
 const nv = drawNightVisionMask();
 
@@ -1020,7 +1166,18 @@ if (nv > 0) {
   ctx.save();
   ctx.translate(w/2, h/2);
   ctx.scale(cam.zoom, cam.zoom);
-  ctx.translate(-cam.x, -cam.y);
+  // camera shake
+if (cam.shakeT > 0){
+  cam.shakeT = Math.max(0, cam.shakeT - dt);
+  const k = (cam.shakeDur > 0) ? (cam.shakeT / cam.shakeDur) : 0;
+  cam.shakeX = (Math.random()*2-1) * (cam.shakeMag||0) * k;
+  cam.shakeY = (Math.random()*2-1) * (cam.shakeMag||0) * k;
+  if (cam.shakeT <= 0){
+    cam.shakeMag = 0; cam.shakeDur = 0; cam.shakeX = 0; cam.shakeY = 0;
+  }
+}
+ctx.translate(-cam.x + (cam.shakeX||0), -cam.y + (cam.shakeY||0));
+
 
   const halfW = (w/2)/cam.zoom;
   const halfH = (h/2)/cam.zoom;

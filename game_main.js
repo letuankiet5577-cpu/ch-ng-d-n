@@ -20,6 +20,31 @@
     pointers: new Map(),
     pinch: { active:false, startDist:0, startZoom:1 }
   };
+  // ===================== World edge block =====================
+// Không cho đi qua rìa map (để sau này mở rộng), nhưng vẫn cho thấy "rừng sâu" bằng fog render.
+let edgeBlockToastT = 0;
+function clampPlayerToWorldBounds(dt){
+  if (scene !== "world") return;
+  const worldW = world.w*TILE;
+  const worldH = world.h*TILE;
+  const pad = 2;
+  const minX = player.r + pad;
+  const minY = player.r + pad;
+  const maxX = worldW - player.r - pad;
+  const maxY = worldH - player.r - pad;
+
+  let hit = false;
+  const ox = player.x, oy = player.y;
+  player.x = clamp(player.x, minX, maxX);
+  player.y = clamp(player.y, minY, maxY);
+  if (player.x !== ox || player.y !== oy) hit = true;
+
+  if (edgeBlockToastT > 0) edgeBlockToastT = Math.max(0, edgeBlockToastT - dt);
+  if (hit && edgeBlockToastT <= 0){
+    showToast("🌫️ Rừng sâu ngoài rìa chưa mở — sẽ khám phá trong tương lai!", 1.2);
+    edgeBlockToastT = 2.0;
+  }
+}
 
   // DOM (mobile)
   const btnSaveGame  = document.getElementById("btnSaveGame");
@@ -837,6 +862,7 @@ if (player.pounceT > 0){
   let nx2 = nx, ny2 = ny + dy;
   let r2 = collideResolveCircle(nx2, ny2, player.r, world);
   player.x = r2.x; player.y = r2.y;
+  if (scene === "world") clampPlayerToWorldBounds(dt);
 
   // gây sát thương khi chạm mục tiêu (ưu tiên mục tiêu đã khoá)
   if (!player.pounceHit){
@@ -950,10 +976,16 @@ const dy = ay * sp * dt;
 
   // ===================== Env + Stats update =====================
   function updateEnv(dt){
-    env.time += (env.speed * dt) * 0.25;
-    if (env.time >= 24) env.time -= 24;
+  // Khi ngủ: thời gian trôi nhanh hơn (ngủ qua đêm nhanh).
+  // - Ngủ trên ổ rơm: nhanh nhất
+  // - Ngất/forced sleep: nhanh
+  const sleepMult = (player.bedSleep ? 12 : (player.forcedSleepT > 0 ? 9 : 1));
+  const dtEnv = dt * sleepMult;
 
-    env.weatherTimer -= dt;
+  env.time += (env.speed * dtEnv) * 0.25;
+  while (env.time >= 24) env.time -= 24;
+
+    env.weatherTimer -= dtEnv;
     if (env.weatherTimer <= 0){
       env.weatherTimer = 25 + Math.random()*35;
       const pick = weatherPick(world.rand || Math.random);

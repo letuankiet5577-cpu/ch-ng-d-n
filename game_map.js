@@ -496,10 +496,48 @@ const homeY = safeHome.ty*TILE + TILE/2;
       terr.ownerName = pal.tag;
       terr.name = dirNameFor(terr.tx, terr.ty); // base
     }
+    
+    // trang trí "bên ngoài bản đồ" để tạo cảm giác rìa rừng còn có thể khám phá về sau
+world.edgeDeco = buildEdgeDeco(seedStr);
 
-    // minimap base
-    world.miniBase = buildMinimapBaseWorld();
+// minimap base
+world.miniBase = buildMinimapBaseWorld();
+
   }
+  function buildEdgeDeco(seedStr){
+  const seed = xmur3(String(seedStr) + "|edgeDeco");
+  const rand = mulberry32(seed());
+
+  const worldW = world.w*TILE;
+  const worldH = world.h*TILE;
+
+  const items = [];
+  const perSide = 34; // mỗi cạnh ~34 bóng cây (tổng ~136)
+
+  function addTree(x,y){
+    items.push({
+      kind: "tree",
+      x, y,
+      s: 0.85 + rand()*1.25,      // scale
+      a: 0.14 + rand()*0.18       // alpha
+    });
+  }
+
+  // left/right (x âm hoặc > worldW)
+  for (let i=0;i<perSide;i++){
+    const y = rand()*worldH;
+    addTree(-TILE*(2 + rand()*10), y);
+    addTree(worldW + TILE*(2 + rand()*10), y);
+  }
+  // top/bottom (y âm hoặc > worldH)
+  for (let i=0;i<perSide;i++){
+    const x = rand()*worldW;
+    addTree(x, -TILE*(2 + rand()*10));
+    addTree(x, worldH + TILE*(2 + rand()*10));
+  }
+
+  return items;
+}
 
   function buildMinimapBaseWorld(){
     const W = mini.width, H = mini.height;

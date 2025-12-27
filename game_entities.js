@@ -551,6 +551,105 @@ const AnimalType = {
   WOLF: "wolf",
 };
 const ANIMAL_COUNT = 320;
+// ===================== Night wolves (pack spawn) =====================
+// Ban đêm sẽ thỉnh thoảng sinh ra 1 bầy sói đi theo nhau để săn hổ.
+// Sói đi một mình thì sẽ sợ hổ và thường bỏ chạy.
+let wolfPackSeq = 1;
+let nightWolfSpawnT = 6; // giây còn lại đến lần spawn tiếp
+const WOLF_NIGHT_MAX = 18; // tổng số sói tối đa (tránh lag + quá khó)
+
+function isNightTime(){
+  const t = env.time;
+  return (t >= 21.0 || t < 5.0);
+}
+
+function countWolves(){
+  let c=0;
+  for (const a of animals) if (a.type === AnimalType.WOLF) c++;
+  return c;
+}
+
+function packSizeNear(wolf, radius=260){
+  if (!wolf.packId) return 1;
+  let c=1;
+  for (const o of animals){
+    if (o === wolf) continue;
+    if (o.type !== AnimalType.WOLF) continue;
+    if (o.packId !== wolf.packId) continue;
+    if (Math.hypot(o.x-wolf.x, o.y-wolf.y) <= radius) c++;
+  }
+  return c;
+}
+
+function findGrassNear(px, py, minR, maxR, tries=60){
+  const worldW = world.w*TILE;
+  const worldH = world.h*TILE;
+  for (let i=0;i<tries;i++){
+    const ang = Math.random()*Math.PI*2;
+    const rr = minR + Math.random()*(maxR-minR);
+    const x = clamp(px + Math.cos(ang)*rr, 8, worldW-8);
+    const y = clamp(py + Math.sin(ang)*rr, 8, worldH-8);
+    const tx = Math.floor(x/TILE);
+    const ty = Math.floor(y/TILE);
+    const idx = ty*world.w + tx;
+    if (world.tiles[idx] === WT.GRASS && !world.solid[idx]) return {x, y};
+  }
+  return null;
+}
+
+function spawnWolfAt(x, y, packId=0, isLeader=false){
+  const a = {
+    type: AnimalType.WOLF,
+    x, y,
+    r: 10,
+    speed: 185,
+    face: Math.random()*Math.PI*2,
+    vx: 0, vy: 0,
+    wanderT: 0,
+    fleeT: 0,
+    stunnedT: 0,
+    aggroT: 0,
+    attackCD: 0,
+    hp: animalBaseHP(AnimalType.WOLF),
+    hpMax: animalBaseHP(AnimalType.WOLF),
+    hitFlashT: 0,
+    packId: packId|0,
+    isLeader: !!isLeader,
+  };
+  animals.push(a);
+  return a;
+}
+
+function spawnWolfPackNearPlayer(){
+  if (scene !== "world") return;
+  const totalWolves = countWolves();
+  if (totalWolves >= WOLF_NIGHT_MAX) return;
+
+  const packN = 3 + ((Math.random()*3)|0); // 3..5
+  const center = findGrassNear(player.x, player.y, 650, 980, 80);
+  if (!center) return;
+
+  const pid = wolfPackSeq++;
+  for (let i=0;i<packN;i++){
+    const jx = (Math.random()-0.5)*120;
+    const jy = (Math.random()-0.5)*120;
+    spawnWolfAt(center.x + jx, center.y + jy, pid, i===0);
+  }
+}
+
+function updateNightWolfSpawns(dt){
+  if (!isNightTime()){
+    nightWolfSpawnT = Math.min(nightWolfSpawnT, 6);
+    return;
+  }
+  if (scene !== "world") return;
+
+  nightWolfSpawnT -= dt;
+  if (nightWolfSpawnT <= 0){
+    spawnWolfPackNearPlayer();
+    nightWolfSpawnT = 22 + Math.random()*18; // 22..40s
+  }
+}
 
 function animalBaseHP(type){
   if (type === AnimalType.DEER)      return 42;
@@ -681,6 +780,7 @@ function damagePlayer(dmg, label){
 
   // ===================== Animal update =====================
   function updateAnimals(dt){
+  updateNightWolfSpawns(dt);
   const detect = 210;
   const farSkip = 1200; // map lớn: thú ở xa không cần AI đầy đủ
 
@@ -712,8 +812,35 @@ function damagePlayer(dmg, label){
     const type       = a.type;
     const isBoar     = (type === AnimalType.BOAR);
     const isBear     = (type === AnimalType.BEAR);
-    const isWolf     = (type === AnimalType.WOLF);
-    const isPredator = isBear || isWolf;
+    const isWolf = (type === AnimalType.WOLF);
+
+// Sói: nếu đi 1 mình thì sợ hổ; chỉ "liều" khi có bầy (và chủ yếu ban đêm)
+const wolfPackSz = isWolf ? packSizeNear(a, 260) : 1;
+const wolfBrave  = isWolf && isNightTime() && wolfPackSz >= 2;
+
+const isPredator = isBear || wolfBrave;
+
+// bán kính phát hiện riêng cho sói
+const detectP = isWolf ? (wolfBrave ? 330 : 240) : detect;
+if (isPredator){
+  if (d < detectP){
+    a.aggroT = Math.max(a.aggroT, 5.0);
+
+    // bầy sói chia sẻ aggro: 1 con thấy -> cả bầy lao tới
+    if (isWolf && a.packId){
+      for (const o of animals){
+        if (o.type !== AnimalType.WOLF) continue;
+        if (o.packId !== a.packId) continue;
+        o.aggroT = Math.max(o.aggroT, 4.0);
+      }
+    }
+  }
+  if (a.hp < a.hpMax){
+    a.aggroT = Math.max(a.aggroT, 7.0);
+  }
+} else {
+  if (d < detectP) a.fleeT = Math.max(a.fleeT, isWolf ? 2.0 : 1.2);
+}
 
     // phát hiện hổ
     if (isPredator){

@@ -86,13 +86,19 @@ function lockNearestTarget(){
 
 function damageTarget(tgt, dmg, label){
   if (!tgt || !tgt.obj) return false;
+
+  // hướng đòn đánh (để tạo hiệu ứng hit đúng hướng)
+  const dir = Math.atan2(tgt.obj.y - player.y, tgt.obj.x - player.x);
+
   if (tgt.kind === "animal"){
     const killed = damageAnimal(tgt.obj, dmg);
+    addFxHitBurst(tgt.obj.x, tgt.obj.y, dir, dmg >= 18 ? 1.55 : 1.0);
     if (label) addFxText(tgt.obj.x, tgt.obj.y-36, label, 0.55);
     return killed;
   }
   if (tgt.kind === "rival"){
     const down = damageRivalTiger(tgt.obj, dmg);
+    addFxHitBurst(tgt.obj.x, tgt.obj.y, dir, dmg >= 16 ? 1.35 : 1.0);
     if (label) addFxText(tgt.obj.x, tgt.obj.y-36, label, 0.55);
     return down;
   }

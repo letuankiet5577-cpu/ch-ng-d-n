@@ -10,7 +10,12 @@
 </head>
 <body>
   <div id="hud">
-    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div id="hudControls" aria-label="HUD controls">
+      <button id="hudToggle" class="iconBtn" type="button" title="Thu gọn / mở rộng HUD">▾</button>
+      <button id="hudSettings" class="iconBtn" type="button" title="Cài đặt">⚙</button>
+    </div>
+
+    <div id="hudTopRow" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div><b>Seed</b></div>
       <input id="seedInput" placeholder="vd: jungle-01" />
       <button id="regenBtn">Tạo lại map</button>
@@ -23,17 +28,17 @@
 
     <div class="bars">
       <div class="barRow">
-        <div class="label">Máu</div>
+        <div class="label"><span class="lblFull">Máu</span><span class="lblShort">HP</span></div>
         <div class="bar"><div class="barFill" id="hpFill"></div></div>
         <div class="barText" id="hpText"></div>
       </div>
       <div class="barRow">
-        <div class="label">Đói</div>
+        <div class="label"><span class="lblFull">Đói</span><span class="lblShort">Đói</span></div>
         <div class="bar"><div class="barFill" id="hungerFill"></div></div>
         <div class="barText" id="hungerText"></div>
       </div>
       <div class="barRow">
-        <div class="label">Buồn ngủ</div>
+        <div class="label"><span class="lblFull">Buồn ngủ</span><span class="lblShort">Ngủ</span></div>
         <div class="bar"><div class="barFill" id="sleepFill"></div></div>
         <div class="barText" id="sleepText"></div>
       </div>
@@ -81,13 +86,63 @@
     </div>
   </div>
 
+  <!-- Settings / Help overlay -->
+  <div id="settingsOverlay" aria-hidden="true">
+    <div id="settingsPanel" role="dialog" aria-label="Cài đặt">
+      <div class="settingsHeader">
+        <div class="settingsTitle">Cài đặt</div>
+        <button id="settingsClose" class="iconBtn" type="button" aria-label="Đóng">✕</button>
+      </div>
+      <div class="settingsBody">
+        <div class="setRow">
+          <label class="setLabel">
+            <input type="checkbox" id="setHudMini">
+            <span><b>HUD gọn</b> (ít che tầm nhìn)</span>
+          </label>
+        </div>
+        <div class="setRow">
+          <label class="setLabel">
+            <input type="checkbox" id="setShowMinimap">
+            <span>Hiện <b>Mini map</b></span>
+          </label>
+        </div>
+        <div class="setRow">
+          <label class="setLabel">
+            <input type="checkbox" id="setShowHint">
+            <span>Hiện <b>gợi ý nổi</b> ở màn hình</span>
+          </label>
+        </div>
+
+        <div class="divider"></div>
+
+        <details open>
+          <summary>Hướng dẫn (Điện thoại)</summary>
+          <div class="helpText">
+            <div>• Di chuyển: <b>joystick</b> góc trái.</div>
+            <div>• Tấn công: giữ nút <b>Tấn công</b> để cào diện rộng; chạm nhanh để cào chính xác.</div>
+            <div>• Chạy: giữ nút <b>Chạy</b>. Khoá: nút <b>Khoá</b>. Hang: nút <b>Hang</b>.</div>
+            <div>• Zoom: <b>pinch 2 ngón</b>.</div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Hướng dẫn (PC)</summary>
+          <div class="helpText">
+            <div>• Di chuyển: <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> / mũi tên. Zoom: <span class="kbd">Q</span>/<span class="kbd">E</span>.</div>
+            <div>• Tấn công: Chuột trái click để <b>cào</b>. Giữ chuột trái để <b>cào diện rộng</b>. Cào 4 lần → tự <b>vồ</b>.</div>
+            <div>• Khoá mục tiêu: click vào kẻ địch hoặc <span class="kbd">TAB</span>. Bỏ khoá: <span class="kbd">X</span>.</div>
+            <div>• Vào hang: <span class="kbd">G</span>. Chạy nhanh: Chuột phải hoặc <span class="kbd">Shift</span>. Ăn: <span class="kbd">F</span>. Ngủ: <span class="kbd">SPACE</span>.</div>
+            <div>• Ẩn/hiện gợi ý nổi: <span class="kbd">H</span>.</div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
   <div id="hint">
-    <div class="hintLine">Di chuyển: <span class="kbd">W</span> <span class="kbd">A</span> <span class="kbd">S</span> <span class="kbd">D</span> / mũi tên. Zoom: <span class="kbd">Q</span> / <span class="kbd">E</span>.</div>
-    <div class="hintLine">Tấn công: Chuột trái <span class="kbd">Click</span> để <b>cào</b> (đánh chính xác vào mục tiêu đã khoá). Giữ Chuột trái để <b>cào diện rộng</b>. Cào 4 lần → Chuột trái sẽ <b>vồ</b>.</div>
-    <div class="hintLine">Khoá mục tiêu: click vào kẻ địch hoặc <span class="kbd">TAB</span>. Bỏ khoá: <span class="kbd">X</span>. Vào hang gần nhất: <span class="kbd">G</span> (hoặc bước sâu vào đường hầm).</div>
-    <div class="hintLine">Chạy nhanh: giữ Chuột phải <span class="kbd">Click</span> hoặc <span class="kbd">Shift</span>. Kéo camera: giữ Chuột giữa.</div>
-    <div class="hintLine">(Phím cũ vẫn dùng được: <span class="kbd">1</span> Cào, <span class="kbd">2</span> Cắn, <span class="kbd">3</span> Vồ, <span class="kbd">4</span> Gầm). Ăn: <span class="kbd">F</span> (gần xác). Ngủ: <span class="kbd">SPACE</span> (đứng trên ổ rơm trong hang). Ẩn/hiện hướng dẫn: <span class="kbd">H</span>.</div>
-    <div class="hintLine">Ban đêm tối hơn → khó săn mồi.</div>
+    <div class="hintLine"><b>Mẹo nhanh:</b> Di chuyển: joystick (điện thoại) / WASD (PC). Tấn công: nút <b>Tấn công</b> hoặc chạm vào màn hình.</div>
+    <div class="hintLine">Zoom: pinch (2 ngón) / <span class="kbd">Q</span><span class="kbd">E</span>. Khoá mục tiêu: nút <b>Khoá</b> / <span class="kbd">TAB</span>. Vào/ra hang: nút <b>Hang</b> / <span class="kbd">G</span>.</div>
+    <div class="hintLine">Bấm <span class="kbd">?</span> để mở <b>Cài đặt</b> & xem hướng dẫn đầy đủ. (PC: <span class="kbd">H</span> ẩn/hiện gợi ý nổi)</div>
   </div>
   <script src="story.js"></script>
   <script src="game_core.js"></script>

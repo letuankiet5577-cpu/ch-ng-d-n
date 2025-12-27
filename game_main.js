@@ -31,6 +31,115 @@
   const btnEnter  = document.getElementById("btnEnter");
   const btnHint   = document.getElementById("btnHint");
 
+  // ===================== Settings / UI =====================
+  const settingsOverlay = document.getElementById("settingsOverlay");
+  const settingsClose   = document.getElementById("settingsClose");
+  const hudToggleBtn    = document.getElementById("hudToggle");
+  const hudSettingsBtn  = document.getElementById("hudSettings");
+
+  const setHudMini      = document.getElementById("setHudMini");
+  const setShowHint     = document.getElementById("setShowHint");
+  const setShowMinimap  = document.getElementById("setShowMinimap");
+
+  const miniPanel = document.getElementById("miniPanel");
+
+  function isTouchDevice(){
+    try{ return window.matchMedia && window.matchMedia("(pointer: coarse)").matches; }
+    catch(_){ return false; }
+  }
+  const defaultHudMini = isTouchDevice() || window.innerWidth < 760;
+
+  function loadBool(key, fallback){
+    try{
+      const v = localStorage.getItem(key);
+      if (v === null) return fallback;
+      if (v === "1") return true;
+      if (v === "0") return false;
+      return !!JSON.parse(v);
+    }catch(_){ return fallback; }
+  }
+  function saveBool(key, val){
+    try{ localStorage.setItem(key, val ? "1" : "0"); }catch(_){}
+  }
+
+  const uiState = {
+    hudMini: loadBool("ui_hudMini", defaultHudMini),
+    showHint: loadBool("ui_showHint", !defaultHudMini), // desktop bật, mobile tắt
+    showMinimap: loadBool("ui_showMinimap", true),
+  };
+
+  function applyUI(){
+    document.body.classList.toggle("hud-mini", !!uiState.hudMini);
+
+    if (hint) hint.style.display = uiState.showHint ? "block" : "none";
+    if (miniPanel) miniPanel.style.display = uiState.showMinimap ? "block" : "none";
+
+    if (hudToggleBtn) hudToggleBtn.textContent = uiState.hudMini ? "▴" : "▾";
+
+    if (setHudMini) setHudMini.checked = !!uiState.hudMini;
+    if (setShowHint) setShowHint.checked = !!uiState.showHint;
+    if (setShowMinimap) setShowMinimap.checked = !!uiState.showMinimap;
+  }
+
+  function openSettings(){
+    if (!settingsOverlay) return;
+    settingsOverlay.classList.add("show");
+    settingsOverlay.setAttribute("aria-hidden", "false");
+  }
+  function closeSettings(){
+    if (!settingsOverlay) return;
+    settingsOverlay.classList.remove("show");
+    settingsOverlay.setAttribute("aria-hidden", "true");
+  }
+
+  if (hudToggleBtn){
+    hudToggleBtn.addEventListener("click", ()=>{
+      uiState.hudMini = !uiState.hudMini;
+      saveBool("ui_hudMini", uiState.hudMini);
+      applyUI();
+      showToast(uiState.hudMini ? "HUD: GỌN" : "HUD: ĐẦY ĐỦ", 0.9);
+    });
+  }
+  if (hudSettingsBtn){
+    hudSettingsBtn.addEventListener("click", openSettings);
+  }
+
+  if (settingsClose){
+    settingsClose.addEventListener("click", closeSettings);
+  }
+  if (settingsOverlay){
+    settingsOverlay.addEventListener("click", (e)=>{
+      if (e.target === settingsOverlay) closeSettings();
+    });
+  }
+  window.addEventListener("keydown", (e)=>{
+    if (e.key === "Escape") closeSettings();
+  });
+
+  if (setHudMini){
+    setHudMini.addEventListener("change", ()=>{
+      uiState.hudMini = setHudMini.checked;
+      saveBool("ui_hudMini", uiState.hudMini);
+      applyUI();
+    });
+  }
+  if (setShowHint){
+    setShowHint.addEventListener("change", ()=>{
+      uiState.showHint = setShowHint.checked;
+      saveBool("ui_showHint", uiState.showHint);
+      applyUI();
+    });
+  }
+  if (setShowMinimap){
+    setShowMinimap.addEventListener("change", ()=>{
+      uiState.showMinimap = setShowMinimap.checked;
+      saveBool("ui_showMinimap", uiState.showMinimap);
+      applyUI();
+    });
+  }
+
+  applyUI();
+
   function setJoy(nx, ny){
     mobileCtl.joyX = clamp(nx, -1, 1);
     mobileCtl.joyY = clamp(ny, -1, 1);
@@ -133,13 +242,9 @@
       else exitCave();
     });
   }
+  // Nút '?' (mobile): mở Cài đặt + Hướng dẫn
   if (btnHint){
-    btnHint.addEventListener("click", ()=>{
-      if (!hint) return;
-      hint.style.display = (hint.style.display === "none") ? "block" : "none";
-      const on = hint.style.display !== "none";
-      showToast(on ? "Hướng dẫn: BẬT" : "Hướng dẫn: TẮT", 0.9);
-    });
+    btnHint.addEventListener("click", openSettings);
   }
 
   // Touch on canvas: tap/hold giống chuột trái + pinch zoom
@@ -231,11 +336,10 @@
     if (k === "f") tryEat();
     if (k === " ") toggleBedSleep();
     if (k === "h"){
-      if (hint){
-        hint.style.display = (hint.style.display === "none") ? "block" : "none";
-        const on = hint.style.display !== "none";
-        showToast(on ? "Hướng dẫn: BẬT (H để tắt)" : "Hướng dẫn: TẮT (H để bật)", 0.9);
-      }
+      uiState.showHint = !uiState.showHint;
+      saveBool("ui_showHint", uiState.showHint);
+      applyUI();
+      showToast(uiState.showHint ? "Gợi ý nổi: BẬT (H để tắt)" : "Gợi ý nổi: TẮT (H để bật)", 0.9);
     }
 
     keys.add(k);

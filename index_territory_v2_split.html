@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RPG Web - Hổ Săn Mồi + Hang Hổ + Chỉ số</title>
+<link rel="stylesheet" href="style_clean.css">
+</head>
+<body>
+  <div id="hud">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div><b>Seed</b></div>
+      <input id="seedInput" placeholder="vd: jungle-01" />
+      <button id="regenBtn">Tạo lại map</button>
+
+      <div class="pill" id="scenePill">Ngoài rừng</div>
+      <div class="pill"><span class="muted">Giờ:</span> <span id="timeLabel"></span></div>
+      <div class="pill"><span class="muted">Thời tiết:</span> <span id="weatherLabel"></span></div>
+      <div class="pill"><span class="muted">Thú rừng:</span> <span id="animalCountLabel"></span></div>
+    </div>
+
+    <div class="bars">
+      <div class="barRow">
+        <div class="label">Máu</div>
+        <div class="bar"><div class="barFill" id="hpFill"></div></div>
+        <div class="barText" id="hpText"></div>
+      </div>
+      <div class="barRow">
+        <div class="label">Đói</div>
+        <div class="bar"><div class="barFill" id="hungerFill"></div></div>
+        <div class="barText" id="hungerText"></div>
+      </div>
+      <div class="barRow">
+        <div class="label">Buồn ngủ</div>
+        <div class="bar"><div class="barFill" id="sleepFill"></div></div>
+        <div class="barText" id="sleepText"></div>
+      </div>
+    </div>
+
+    <div class="skills">
+      <div class="muted" style="font-weight:900;">Kỹ năng</div>
+      <div class="skillRow">
+        <div class="skillPill" id="ab1">1 Cào</div>
+        <div class="skillPill" id="ab2">2 Cắn</div>
+        <div class="skillPill" id="ab3">3 Vồ</div>
+        <div class="skillPill" id="ab4">4 Gầm</div>
+      </div>
+      <div class="muted" id="stateLabel" style="font-weight:900;"></div>
+    </div>
+  </div>
+
+  <div id="miniPanel">
+    <div id="miniTitle">
+      <div id="miniName">Mini Map (Rừng)</div>
+      <div class="muted" id="posLabel"></div>
+    </div>
+    <canvas id="minimap" width="224" height="224"></canvas>
+  </div>
+
+  <div id="toast">...</div>
+  <div id="err"></div>
+
+  <canvas id="view"></canvas>
+
+  <div id="hint">
+    <div class="hintLine">Di chuyển: <span class="kbd">W</span> <span class="kbd">A</span> <span class="kbd">S</span> <span class="kbd">D</span> / mũi tên. Zoom: <span class="kbd">Q</span> / <span class="kbd">E</span>.</div>
+    <div class="hintLine">Tấn công: Chuột trái <span class="kbd">Click</span> để <b>cào</b> (đánh chính xác vào mục tiêu đã khoá). Giữ Chuột trái để <b>cào diện rộng</b>. Cào 4 lần → Chuột trái sẽ <b>vồ</b>.</div>
+    <div class="hintLine">Khoá mục tiêu: click vào kẻ địch hoặc <span class="kbd">TAB</span>. Bỏ khoá: <span class="kbd">X</span>. Vào hang gần nhất: <span class="kbd">G</span> (hoặc bước sâu vào đường hầm).</div>
+    <div class="hintLine">Chạy nhanh: giữ Chuột phải <span class="kbd">Click</span> hoặc <span class="kbd">Shift</span>. Kéo camera: giữ Chuột giữa.</div>
+    <div class="hintLine">(Phím cũ vẫn dùng được: <span class="kbd">1</span> Cào, <span class="kbd">2</span> Cắn, <span class="kbd">3</span> Vồ, <span class="kbd">4</span> Gầm). Ăn: <span class="kbd">F</span> (gần xác). Ngủ: <span class="kbd">SPACE</span> (đứng trên ổ rơm trong hang). Ẩn/hiện hướng dẫn: <span class="kbd">H</span>.</div>
+    <div class="hintLine">Ban đêm tối hơn → khó săn mồi.</div>
+  </div>
+  <script src="story.js"></script>
+  <script src="game_core.js"></script>
+  <script src="game_dom.js"></script>
+  <script src="game_map.js"></script>
+  <script src="game_entities.js"></script>
+  <script src="game_combat.js"></script>
+  <script src="game_render.js"></script>
+  <script src="game_main.js"></script>
+</body>
+</html>

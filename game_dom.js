@@ -46,11 +46,19 @@
 
   function resize(){
     const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    view.width  = Math.floor(window.innerWidth * dpr);
-    view.height = Math.floor(window.innerHeight * dpr);
+    // iOS/Android: dùng visualViewport nếu có để hạn chế lỗi thanh URL làm thay đổi kích thước.
+    const vv = window.visualViewport;
+    const w = (vv && vv.width)  ? vv.width  : window.innerWidth;
+    const h = (vv && vv.height) ? vv.height : window.innerHeight;
+    view.width  = Math.floor(w * dpr);
+    view.height = Math.floor(h * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
   window.addEventListener("resize", resize);
+  if (window.visualViewport){
+    window.visualViewport.addEventListener("resize", resize);
+    window.visualViewport.addEventListener("scroll", resize);
+  }
   resize();
 
   // ===================== roundRect fallback =====================

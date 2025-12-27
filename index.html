@@ -102,6 +102,13 @@
         </div>
         <div class="setRow">
           <label class="setLabel">
+            <input type="checkbox" id="setSmallUI">
+            <span><b>UI nhỏ</b> (điện thoại: ít che màn)</span>
+          </label>
+        </div>
+
+        <div class="setRow">
+          <label class="setLabel">
             <input type="checkbox" id="setShowMinimap">
             <span>Hiện <b>Mini map</b></span>
           </label>
@@ -119,7 +126,7 @@
           <summary>Hướng dẫn (Điện thoại)</summary>
           <div class="helpText">
             <div>• Di chuyển: <b>joystick</b> góc trái.</div>
-            <div>• Tấn công: giữ nút <b>Tấn công</b> để cào diện rộng; chạm nhanh để cào chính xác.</div>
+            <div>• Tấn công: chạm <b>Tấn công</b> để đánh. Nếu chưa khoá mục tiêu → sẽ ưu tiên <b>cào diện rộng</b>. Giữ nút để cào rộng.</div>
             <div>• Chạy: giữ nút <b>Chạy</b>. Khoá: nút <b>Khoá</b>. Hang: nút <b>Hang</b>.</div>
             <div>• Zoom: <b>pinch 2 ngón</b>.</div>
           </div>
@@ -139,10 +146,9 @@
     </div>
   </div>
 
-  <div id="hint">
-    <div class="hintLine"><b>Mẹo nhanh:</b> Di chuyển: joystick (điện thoại) / WASD (PC). Tấn công: nút <b>Tấn công</b> hoặc chạm vào màn hình.</div>
-    <div class="hintLine">Zoom: pinch (2 ngón) / <span class="kbd">Q</span><span class="kbd">E</span>. Khoá mục tiêu: nút <b>Khoá</b> / <span class="kbd">TAB</span>. Vào/ra hang: nút <b>Hang</b> / <span class="kbd">G</span>.</div>
-    <div class="hintLine">Bấm <span class="kbd">?</span> để mở <b>Cài đặt</b> & xem hướng dẫn đầy đủ. (PC: <span class="kbd">H</span> ẩn/hiện gợi ý nổi)</div>
+  <div id="hint" aria-label="Gợi ý">
+    <button id="hintClose" class="iconBtn" type="button" title="Tắt gợi ý" aria-label="Tắt gợi ý">✕</button>
+    <div class="hintLine"><b>Mẹo:</b> Bấm <b>?</b> (điện thoại) hoặc <b>⚙</b> để mở <b>Cài đặt</b>. Di chuyển: <b>joystick</b>. Tấn công: nút <b>Tấn công</b>.</div>
   </div>
   <script src="story.js"></script>
   <script src="game_core.js"></script>

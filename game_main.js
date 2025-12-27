@@ -12,6 +12,388 @@
   leftHoldFired: false
 };
 
+  // ===================== Mobile / Touch =====================
+  const mobileCtl = {
+    joyX: 0,
+    joyY: 0,
+    sprint: false,
+    pointers: new Map(),
+    pinch: { active:false, startDist:0, startZoom:1 }
+  };
+
+  // DOM (mobile)
+  const mobileControls = document.getElementById("mobileControls");
+  const joyBase  = document.getElementById("joyBase");
+  const joyStick = document.getElementById("joyStick");
+  const btnAttack = document.getElementById("btnAttack");
+  const btnSprint = document.getElementById("btnSprint");
+  const btnLock   = document.getElementById("btnLock");
+  const btnEnter  = document.getElementById("btnEnter");
+  const btnHint   = document.getElementById("btnHint");
+  const hintClose = document.getElementById("hintClose");
+
+  // ===================== Settings / UI =====================
+  const settingsOverlay = document.getElementById("settingsOverlay");
+  const settingsClose   = document.getElementById("settingsClose");
+  const hudToggleBtn    = document.getElementById("hudToggle");
+  const hudSettingsBtn  = document.getElementById("hudSettings");
+
+  const setHudMini      = document.getElementById("setHudMini");
+  const setShowHint     = document.getElementById("setShowHint");
+  const setShowMinimap  = document.getElementById("setShowMinimap");
+  const setSmallUI      = document.getElementById("setSmallUI");
+
+  const miniPanel = document.getElementById("miniPanel");
+
+  function isTouchDevice(){
+    // iOS đôi khi trả matchMedia sai; dùng thêm maxTouchPoints/ontouchstart.
+    try{
+      if (navigator && typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 0) return true;
+      if ("ontouchstart" in window) return true;
+      return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    } catch(_){
+      return ("ontouchstart" in window);
+    }
+  }
+  const defaultHudMini = isTouchDevice() || window.innerWidth < 760;
+
+  function loadBool(key, fallback){
+    try{
+      const v = localStorage.getItem(key);
+      if (v === null) return fallback;
+      if (v === "1") return true;
+      if (v === "0") return false;
+      return !!JSON.parse(v);
+    }catch(_){ return fallback; }
+  }
+  function saveBool(key, val){
+    try{ localStorage.setItem(key, val ? "1" : "0"); }catch(_){}
+  }
+
+  // Nếu đã từng dùng bản cũ, localStorage có thể giữ UI to/hint bật.
+  // Tăng version để reset mặc định hợp lý cho điện thoại.
+  const UI_VERSION = "4";
+  const storedVer = (()=>{ try{return localStorage.getItem("ui_version");}catch(_){return null;} })();
+  const touchNow = isTouchDevice() || window.innerWidth < 760;
+
+  const uiState = {
+    hudMini: loadBool("ui_hudMini", defaultHudMini),
+    smallUI: loadBool("ui_smallUI", defaultHudMini),
+    showHint: loadBool("ui_showHint", !defaultHudMini),
+    showMinimap: loadBool("ui_showMinimap", true),
+  };
+
+  // Reset 1 lần khi version đổi để tránh trạng thái cũ (UI to/hint bật) làm che màn.
+  if (storedVer !== UI_VERSION){
+    // Trên touch/mobile: luôn ưu tiên gọn + tắt gợi ý nổi.
+    if (touchNow){
+      uiState.hudMini = true;
+      uiState.smallUI = true;
+      uiState.showHint = false;
+      uiState.showMinimap = true;
+    }
+    try{ localStorage.setItem("ui_version", UI_VERSION); }catch(_){ }
+    saveBool("ui_hudMini", uiState.hudMini);
+    saveBool("ui_smallUI", uiState.smallUI);
+    saveBool("ui_showHint", uiState.showHint);
+    saveBool("ui_showMinimap", uiState.showMinimap);
+  }
+
+  function applyUI(){
+    document.body.classList.toggle("hud-mini", !!uiState.hudMini);
+    document.body.classList.toggle("ui-small", !!uiState.smallUI);
+
+    if (hint) hint.style.display = uiState.showHint ? "block" : "none";
+    if (miniPanel) miniPanel.style.display = uiState.showMinimap ? "block" : "none";
+    document.body.classList.toggle("minimap-off", !uiState.showMinimap);
+
+    if (hudToggleBtn) hudToggleBtn.textContent = uiState.hudMini ? "▴" : "▾";
+
+    if (setHudMini) setHudMini.checked = !!uiState.hudMini;
+    if (setShowHint) setShowHint.checked = !!uiState.showHint;
+    if (setShowMinimap) setShowMinimap.checked = !!uiState.showMinimap;
+    if (setSmallUI) setSmallUI.checked = !!uiState.smallUI;
+  }
+
+  function openSettings(){
+    if (!settingsOverlay) return;
+    settingsOverlay.classList.add("show");
+    settingsOverlay.setAttribute("aria-hidden", "false");
+  }
+  function closeSettings(){
+    if (!settingsOverlay) return;
+    settingsOverlay.classList.remove("show");
+    settingsOverlay.setAttribute("aria-hidden", "true");
+  }
+
+  if (hudToggleBtn){
+    hudToggleBtn.addEventListener("click", ()=>{
+      uiState.hudMini = !uiState.hudMini;
+      saveBool("ui_hudMini", uiState.hudMini);
+      applyUI();
+      showToast(uiState.hudMini ? "HUD: GỌN" : "HUD: ĐẦY ĐỦ", 0.9);
+    });
+  }
+  if (hudSettingsBtn){
+    hudSettingsBtn.addEventListener("click", openSettings);
+  }
+
+  if (settingsClose){
+    settingsClose.addEventListener("click", closeSettings);
+  }
+  if (settingsOverlay){
+    settingsOverlay.addEventListener("click", (e)=>{
+      if (e.target === settingsOverlay) closeSettings();
+    });
+  }
+  window.addEventListener("keydown", (e)=>{
+    if (e.key === "Escape") closeSettings();
+  });
+
+  if (setHudMini){
+    setHudMini.addEventListener("change", ()=>{
+      uiState.hudMini = setHudMini.checked;
+      saveBool("ui_hudMini", uiState.hudMini);
+      applyUI();
+    });
+  }
+  if (setShowHint){
+    setShowHint.addEventListener("change", ()=>{
+      uiState.showHint = setShowHint.checked;
+      saveBool("ui_showHint", uiState.showHint);
+      applyUI();
+    });
+  }
+
+  // Đóng gợi ý nổi ngay trên màn hình (đỡ bị che trên mobile)
+  if (hintClose){
+    hintClose.addEventListener("click", (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      uiState.showHint = false;
+      saveBool("ui_showHint", uiState.showHint);
+      applyUI();
+      showToast("Đã tắt gợi ý", 0.8);
+    });
+  }
+  if (setShowMinimap){
+    setShowMinimap.addEventListener("change", ()=>{
+      uiState.showMinimap = setShowMinimap.checked;
+      saveBool("ui_showMinimap", uiState.showMinimap);
+      applyUI();
+    });
+  }
+
+  if (setSmallUI){
+    setSmallUI.addEventListener("change", ()=>{
+      uiState.smallUI = !!setSmallUI.checked;
+      saveBool("ui_smallUI", uiState.smallUI);
+      applyUI();
+      showToast(uiState.smallUI ? "UI: NHỎ" : "UI: MẶC ĐỊNH", 0.9);
+    });
+  }
+
+  applyUI();
+
+  function setJoy(nx, ny){
+    mobileCtl.joyX = clamp(nx, -1, 1);
+    mobileCtl.joyY = clamp(ny, -1, 1);
+  }
+
+  // Joystick (pointer events)
+  (function initJoystick(){
+    if (!joyBase || !joyStick) return;
+    let activePid = null;
+    let cx=0, cy=0, maxR=40;
+
+    function recalc(){
+      const r = joyBase.getBoundingClientRect();
+      cx = r.left + r.width/2;
+      cy = r.top + r.height/2;
+      maxR = Math.max(28, r.width * 0.32);
+    }
+    recalc();
+    window.addEventListener("resize", recalc);
+
+    function renderStick(){
+      const dx = mobileCtl.joyX * maxR;
+      const dy = mobileCtl.joyY * maxR;
+      joyStick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    }
+
+    function onMove(e){
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      const d = Math.hypot(dx,dy);
+      const t = (d > 1e-6) ? Math.min(1, d / maxR) : 0;
+      const nx = (d > 1e-6) ? (dx / d) * t : 0;
+      const ny = (d > 1e-6) ? (dy / d) * t : 0;
+      setJoy(nx, ny);
+      renderStick();
+    }
+
+    function reset(){
+      activePid = null;
+      setJoy(0,0);
+      renderStick();
+    }
+
+    joyBase.addEventListener("pointerdown", (e)=>{
+      e.preventDefault();
+      recalc();
+      activePid = e.pointerId;
+      joyBase.setPointerCapture(activePid);
+      onMove(e);
+    }, {passive:false});
+
+    joyBase.addEventListener("pointermove", (e)=>{
+      if (e.pointerId !== activePid) return;
+      e.preventDefault();
+      onMove(e);
+    }, {passive:false});
+
+    joyBase.addEventListener("pointerup", (e)=>{
+      if (e.pointerId !== activePid) return;
+      e.preventDefault();
+      reset();
+    }, {passive:false});
+    joyBase.addEventListener("pointercancel", reset, {passive:true});
+  })();
+
+  // Mobile action buttons
+  function mobileAttackDown(){
+    if (scene !== "world") return;
+    mouse.leftDown = true;
+    mouse.leftDownAtMs = performance.now();
+    mouse.leftHoldFired = false;
+  }
+  function mobilePrimaryAttackTap(){
+    if (scene !== "world") return;
+    if (locked()) return;
+    // Nếu chưa khoá mục tiêu: ưu tiên khoá gần nhất; nếu không có thì cào rộng để luôn có phản hồi.
+    if (!getLockedTarget()){
+      lockNearestTarget();
+    }
+    if (!getLockedTarget()){
+      useClaw({wide:true});
+      return;
+    }
+    primaryAttackTap();
+  }
+
+  function mobileAttackUp(){
+    if (!mouse.leftDown) return;
+    mouse.leftDown = false;
+    if (!mouse.leftHoldFired) mobilePrimaryAttackTap();
+  }
+
+  if (btnAttack){
+    btnAttack.addEventListener("pointerdown", (e)=>{
+      e.preventDefault();
+      try{ btnAttack.setPointerCapture(e.pointerId); }catch(_){ }
+      mobileAttackDown();
+    }, {passive:false});
+    btnAttack.addEventListener("pointerup", (e)=>{
+      e.preventDefault();
+      mobileAttackUp();
+      try{ btnAttack.releasePointerCapture(e.pointerId); }catch(_){ }
+    }, {passive:false});
+    btnAttack.addEventListener("pointercancel", (e)=>{ mobileAttackUp(); }, {passive:true});
+  }
+
+  if (btnSprint){
+    const setSprint = (on)=>{
+      mobileCtl.sprint = !!on;
+      btnSprint.classList.toggle("on", mobileCtl.sprint);
+    };
+    btnSprint.addEventListener("pointerdown", (e)=>{ e.preventDefault(); setSprint(true); }, {passive:false});
+    btnSprint.addEventListener("pointerup",   (e)=>{ e.preventDefault(); setSprint(false); }, {passive:false});
+    btnSprint.addEventListener("pointercancel", ()=>setSprint(false), {passive:true});
+  }
+  if (btnLock){
+    btnLock.addEventListener("click", ()=>lockNearestTarget());
+  }
+  if (btnEnter){
+    btnEnter.addEventListener("click", ()=>{
+      if (scene === "world") tryEnterNearbyCave();
+      else exitCave();
+    });
+  }
+  // Nút '?' (mobile): mở Cài đặt + Hướng dẫn
+  if (btnHint){
+    btnHint.addEventListener("click", openSettings);
+  }
+
+  // Touch on canvas: tap/hold giống chuột trái + pinch zoom
+  view.addEventListener("pointerdown", (e)=>{
+    if (e.pointerType === "mouse") return;
+    e.preventDefault();
+
+    // track pointers for pinch
+    mobileCtl.pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (mobileCtl.pointers.size === 2){
+      const pts = [...mobileCtl.pointers.values()];
+      mobileCtl.pinch.active = true;
+      mobileCtl.pinch.startDist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      mobileCtl.pinch.startZoom = cam.zoom;
+      mouse.leftDown = false;
+      return;
+    }
+
+    view.setPointerCapture(e.pointerId);
+    updateMouseWorld(e);
+    mouse.leftDown = true;
+    mouse.leftDownAtMs = performance.now();
+    mouse.leftHoldFired = false;
+
+    // tap vào mục tiêu để khoá
+    const picked = pickTargetAt(mouse.x, mouse.y);
+    if (picked){
+      setLockedTarget(picked.obj, picked.kind);
+    }
+
+    // xoay mặt về hướng tap / mục tiêu
+    const aim = getLockedTarget();
+    const dx = (aim ? aim.obj.x : mouse.x) - player.x;
+    const dy = (aim ? aim.obj.y : mouse.y) - player.y;
+    if (Math.abs(dx) + Math.abs(dy) > 1e-3) player.face = Math.atan2(dy, dx);
+  }, {passive:false});
+
+  view.addEventListener("pointermove", (e)=>{
+    if (e.pointerType === "mouse") return;
+    if (!mobileCtl.pointers.has(e.pointerId)) return;
+    e.preventDefault();
+    mobileCtl.pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+
+    if (mobileCtl.pinch.active && mobileCtl.pointers.size >= 2){
+      const pts = [...mobileCtl.pointers.values()];
+      const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      const ratio = (mobileCtl.pinch.startDist > 1e-6) ? (d / mobileCtl.pinch.startDist) : 1;
+      cam.zoom = clamp(mobileCtl.pinch.startZoom * ratio, 0.70, 1.90);
+      return;
+    }
+    updateMouseWorld(e);
+  }, {passive:false});
+
+  function onTouchEnd(e){
+    if (e.pointerType === "mouse") return;
+    mobileCtl.pointers.delete(e.pointerId);
+    if (mobileCtl.pinch.active){
+      if (mobileCtl.pointers.size < 2) mobileCtl.pinch.active = false;
+      return;
+    }
+    if (!mouse.leftDown) return;
+    updateMouseWorld(e);
+    mouse.leftDown = false;
+    if (!mouse.leftHoldFired) {
+      // Trên mobile: cho phép tap để đánh mà không bắt buộc khoá mục tiêu
+      // (tránh toast "Chưa khoá mục tiêu (TAB)").
+      mobilePrimaryAttackTap();
+    }
+  }
+  view.addEventListener("pointerup", (e)=>{ e.preventDefault(); onTouchEnd(e); }, {passive:false});
+  view.addEventListener("pointercancel", onTouchEnd, {passive:true});
+
   window.addEventListener("keydown", (e)=>{
     const k = e.key.toLowerCase();
     if (e.repeat) return;
@@ -35,11 +417,10 @@
     if (k === "f") tryEat();
     if (k === " ") toggleBedSleep();
     if (k === "h"){
-      if (hint){
-        hint.style.display = (hint.style.display === "none") ? "block" : "none";
-        const on = hint.style.display !== "none";
-        showToast(on ? "Hướng dẫn: BẬT (H để tắt)" : "Hướng dẫn: TẮT (H để bật)", 0.9);
-      }
+      uiState.showHint = !uiState.showHint;
+      saveBool("ui_showHint", uiState.showHint);
+      applyUI();
+      showToast(uiState.showHint ? "Gợi ý nổi: BẬT (H để tắt)" : "Gợi ý nổi: TẮT (H để bật)", 0.9);
     }
 
     keys.add(k);
@@ -399,6 +780,10 @@ if (player.pounceT > 0){
     if (keys.has("a") || keys.has("arrowleft")) ax -= 1;
     if (keys.has("d") || keys.has("arrowright")) ax += 1;
 
+    // mobile joystick (giữ nguyên gameplay, chỉ thêm input)
+    ax += mobileCtl.joyX;
+    ay += mobileCtl.joyY;
+
     if (keys.has("q")) cam.zoom = clamp(cam.zoom - 0.02, 0.70, 1.90);
     if (keys.has("e")) cam.zoom = clamp(cam.zoom + 0.02, 0.70, 1.90);
 
@@ -412,7 +797,7 @@ if (player.pounceT > 0){
 let sp = player.speed;
 
 // sprint: giữ chuột phải HOẶC Shift
-player.sprint = (mouse.rightDown || keys.has("shift")) && !locked();
+player.sprint = (mouse.rightDown || keys.has("shift") || mobileCtl.sprint) && !locked();
 if (player.sprint){
   sp *= 1.8; // chạy nhanh
 }

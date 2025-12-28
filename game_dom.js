@@ -32,6 +32,70 @@
   const errBox = document.getElementById("err");
   const hint = document.getElementById("hint");
 
+  // Story + Quest UI
+  const questBox  = document.getElementById("questBox");
+  const questText = document.getElementById("questText");
+  const storyBar  = document.getElementById("storyBar");
+  const storyName = document.getElementById("storyName");
+  const storyText = document.getElementById("storyText");
+  const storyHint = document.getElementById("storyHint");
+
+  function setQuest(text){
+    if (!questBox || !questText) return;
+    if (!text){
+      questBox.style.display = "none";
+      questBox.setAttribute("aria-hidden","true");
+      questText.textContent = "";
+      return;
+    }
+    questText.textContent = text;
+    questBox.style.display = "block";
+    questBox.setAttribute("aria-hidden","false");
+  }
+
+  function showStoryLine(name, text){
+    if (!storyBar || !storyName || !storyText) return;
+    storyName.textContent = name || "";
+    storyText.textContent = text || "";
+    storyBar.style.display = "block";
+    storyBar.setAttribute("aria-hidden","false");
+    if (storyHint){
+      storyHint.textContent = ("ontouchstart" in window) ? "Chạm để tiếp tục" : "Nhấp để tiếp tục";
+    }
+  }
+  function hideStory(){
+    if (!storyBar) return;
+    storyBar.style.display = "none";
+    storyBar.setAttribute("aria-hidden","true");
+  }
+
+  // allow tap/click to advance story
+  if (storyBar){
+    storyBar.addEventListener("click", ()=>{
+      if (window.Story && typeof Story.advance === "function"){
+        Story.advance();
+      }
+    });
+  }
+  window.addEventListener("keydown", (e)=>{
+    if (e.key === "Enter" || e.key === " "){
+      if (window.Story && typeof Story.advance === "function"){
+        Story.advance();
+      }
+    }
+  });
+
+  // expose helpers for story.js
+  window.setQuest = setQuest;
+  window.showStoryLine = showStoryLine;
+  window.hideStory = hideStory;
+
+  // bind UI to story module (if present)
+  if (window.Story && typeof Story.bindUI === "function"){
+    Story.bindUI({ setQuest, showStoryLine, hideStory });
+  }
+
+
   let toastTimer = 0;
   function showToast(text, sec=1.1){
     toast.textContent = text;

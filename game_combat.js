@@ -92,12 +92,19 @@ function damageTarget(tgt, dmg, label){
 
   if (tgt.kind === "animal"){
     const killed = damageAnimal(tgt.obj, dmg);
+    // story hook: kill counter / quest
+    if (killed && window.Story && typeof Story.onKill === "function"){
+      Story.onKill("animal", tgt.obj);
+    }
     addFxHitBurst(tgt.obj.x, tgt.obj.y, dir, dmg >= 18 ? 1.55 : 1.0);
     if (label) addFxText(tgt.obj.x, tgt.obj.y-36, label, 0.55);
     return killed;
   }
   if (tgt.kind === "rival"){
     const down = damageRivalTiger(tgt.obj, dmg);
+    if (down && window.Story && typeof Story.onKill === "function"){
+      Story.onKill("rival", tgt.obj);
+    }
     addFxHitBurst(tgt.obj.x, tgt.obj.y, dir, dmg >= 16 ? 1.35 : 1.0);
     if (label) addFxText(tgt.obj.x, tgt.obj.y-36, label, 0.55);
     return down;

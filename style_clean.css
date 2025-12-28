@@ -489,3 +489,86 @@
       #joyStick{ width: 48px; height: 48px; }
       .mBtn{ padding: 9px 10px; border-radius: 12px; }
     }
+
+
+
+    /* ===================== Quest + Story UI ===================== */
+    #questBox{
+      position: fixed;
+      left: calc(12px + env(safe-area-inset-left));
+      top:  calc(12px + env(safe-area-inset-top));
+      max-width: min(360px, calc(100vw - 24px));
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.30);
+      backdrop-filter: blur(6px);
+      color: rgba(255,255,255,.92);
+      z-index: 20;
+      display: none;
+      pointer-events: none;
+      box-sizing: border-box;
+      line-height: 1.35;
+    }
+    #questBox .questTitle{
+      font-weight: 900;
+      letter-spacing: .2px;
+      opacity: .92;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    #questText{
+      font-size: 12px;
+      opacity: .92;
+      white-space: pre-line;
+    }
+
+    #storyBar{
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(740px, calc(100vw - 24px));
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      padding: 10px 12px 9px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.38);
+      backdrop-filter: blur(7px);
+      color: rgba(255,255,255,.92);
+      z-index: 30;
+      display: none;
+      cursor: pointer;
+      user-select: none;
+      box-sizing: border-box;
+    }
+    #storyName{
+      font-weight: 900;
+      font-size: 13px;
+      opacity: .96;
+      margin-bottom: 6px;
+    }
+    #storyText{
+      font-size: 13px;
+      line-height: 1.45;
+      opacity: .92;
+      white-space: pre-line;
+    }
+    #storyHint{
+      margin-top: 7px;
+      font-size: 11px;
+      opacity: .55;
+      text-align: right;
+    }
+
+    /* mobile: raise story bar above joystick/actions */
+    @media (pointer: coarse){
+      #storyBar{
+        bottom: calc(150px + env(safe-area-inset-bottom));
+      }
+      @media (orientation: landscape){
+        #storyBar{
+          bottom: calc(120px + env(safe-area-inset-bottom));
+        }
+      }
+    }
+

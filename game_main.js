@@ -218,6 +218,7 @@
         mode: t.mode, deadT: t.deadT||0,
         aggroT: t.aggroT||0, stunnedT: t.stunnedT||0
       })),
+      story: (window.Story && typeof Story.getSaveState === "function") ? Story.getSaveState() : null,
       carcasses: carcasses.map(c=>({x:c.x, y:c.y, meat:c.meat, ttl:c.ttl}))
     };
     return data;
@@ -264,6 +265,11 @@
       }
     }
 
+    // story
+    if (window.Story && typeof Story.applySaveState === "function"){
+      Story.applySaveState(data.story);
+    }
+
     // player
     if (data.player){
       if (typeof data.player.x === "number") player.x = data.player.x;
@@ -308,7 +314,7 @@
     try{
       if (seedInput && data.seed) seedInput.value = data.seed;
     }catch(_){}
-    regen(); // tạo lại world/cave base
+    regen({skipStory:true}); // tạo lại world/cave base (không reset cốt truyện khi đang Load Save)
 
     // quay lại scene đã lưu
     if (data.scene === "cave" && data.activeCaveTerritoryId != null){
@@ -326,6 +332,9 @@
   function clearSave(){
     try{
       localStorage.removeItem(SAVE_KEY);
+      // reset story progress too
+      localStorage.removeItem("territory_split_story_v1");
+      if (window.Story && typeof Story.reset === "function") Story.reset();
       showToast("🗑️ Đã xoá save", 0.9);
     }catch(_){
       showToast("Không thể xoá save", 0.9);
@@ -515,6 +524,7 @@
   if (btnAttack){
     btnAttack.addEventListener("pointerdown", (e)=>{
       e.preventDefault();
+      if (window.Story && typeof Story.isBlocking === "function" && Story.isBlocking()) return;
       try{ btnAttack.setPointerCapture(e.pointerId); }catch(_){ }
       mobileAttackDown();
     }, {passive:false});
@@ -540,6 +550,7 @@
   }
   if (btnEnter){
     btnEnter.addEventListener("click", ()=>{
+      if (window.Story && typeof Story.isBlocking === "function" && Story.isBlocking()) return;
       if (scene === "world") tryEnterNearbyCave();
       else exitCave();
     });
@@ -623,6 +634,12 @@
   window.addEventListener("keydown", (e)=>{
     const k = e.key.toLowerCase();
     if (e.repeat) return;
+
+    // pause gameplay when story dialogue is blocking
+    if (window.Story && typeof Story.isBlocking === "function" && Story.isBlocking()){
+      e.preventDefault();
+      return;
+    }
 
     // skills cũ vẫn dùng được (tùy bạn, có thể bỏ sau này)
     if (k === "1") useClaw();
@@ -1158,6 +1175,11 @@ function respawn(){
   cam.dragTargetY = 0;
 
   showToast("Hổ ngất đi… tỉnh lại trên ổ rơm, thương tích đầy mình. Hãy ăn và ngủ để hồi phục.", 2.5);
+
+  // story hook: Tiểu Bạch chăm sóc khi chàng tỉnh dậy
+  if (window.Story && typeof Story.onRespawn === "function"){
+    Story.onRespawn();
+  }
 }
 
   function nearestCarcassInfo(){
@@ -1210,6 +1232,7 @@ function respawn(){
   if (btnUse){
     btnUse.addEventListener("pointerdown", (e)=>{
       e.preventDefault();
+      if (window.Story && typeof Story.isBlocking === "function" && Story.isBlocking()) return;
       e.stopPropagation();
       const mode = btnUse.dataset.mode || "";
       if (mode === "sleep"){
@@ -1426,24 +1449,31 @@ if (body.cold > 85){
 
       if (sceneCooldown > 0) sceneCooldown -= dt;
 
-      updateEnv(dt);
-      updateStats(dt);
+      const storyBlock = (window.Story && typeof Story.isBlocking === "function") ? !!Story.isBlocking() : false;
+      const gdt = storyBlock ? 0 : dt;
 
-      // move & gameplay
-      movePlayer(dt);
+      updateEnv(gdt);
+      updateStats(gdt);
+
+      // move & gameplay (pause when story is blocking)
+      movePlayer(gdt);
 
       // giữ chuột trái => cào diện rộng (chỉ bắn 1 lần mỗi lần giữ)
-      updateMouseHoldAttack(now);
+      if (!storyBlock){
+        updateMouseHoldAttack(now);
+      } else {
+        mouse.leftHoldFired = false;
+      }
 
       // update animals only outside
       if (scene === "world"){
-        updateAnimals(dt);
-        updateRivalTigers(dt);
-        updateTerritoryCrossing();
+        updateAnimals(gdt);
+        updateRivalTigers(gdt);
+        if (!storyBlock) updateTerritoryCrossing();
         renderWorld(now/1000, dt);
       } else {
         // trong hang: cho hổ chủ hang đuổi người chơi
-        updateCaveTiger(dt);
+        updateCaveTiger(gdt);
         renderCave(now/1000, dt);
       }
 
@@ -1475,7 +1505,8 @@ if (body.cold > 85){
   }
 
   // ===================== Regen =====================
-  function regen(){
+  function regen(opts){
+    opts = opts || {};
     errBox.style.display = "none";
 
     const s = seedInput.value.trim() || "jungle-01";
@@ -1507,6 +1538,11 @@ if (body.cold > 85){
     env.weatherTimer = 10;
     env.weatherType = "clear";
     env.weather = "Quang đãng";
+
+    // Story: tạo map mới => reset cốt truyện (chỉ giữ khi Load Save)
+    if (!opts.skipStory && window.Story && typeof Story.onNewMap === "function" && Story.__initDone){
+      Story.onNewMap(s);
+    }
 
     showToast("Đã tạo map!", 0.9);
   }

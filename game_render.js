@@ -1266,6 +1266,34 @@ if (nv > 0) {
     else if (p.type === P.PELT) drawPelt(p.x,p.y);
   }
 
+  // vẽ NPC trong hang (hổ chủ hang + Tiểu Bạch) rồi mới vẽ người chơi
+
+  // hổ chủ hang (nếu xâm nhập hang hổ khác)
+  if (typeof caveTigerHost !== "undefined" && caveTigerHost && caveTigerHost.deadT <= 0){
+    drawTigerStyled(caveTigerHost.x, caveTigerHost.y, caveTigerHost.face, caveTigerHost.palette, caveTigerHost.hitFlashT||0);
+
+    // tên khi gần
+    const dd = Math.hypot(player.x - caveTigerHost.x, player.y - caveTigerHost.y);
+    if (dd < 260){
+      drawNameTag(caveTigerHost.ownerName || "Hổ Chủ Hang", caveTigerHost.x, caveTigerHost.y - 42);
+    }
+  }
+
+  // Tiểu Bạch (vợ của Dần Ca) trong hang của bạn
+  if (window.wifeNPC){
+    drawTigerStyled(window.wifeNPC.x, window.wifeNPC.y, window.wifeNPC.face, window.wifeNPC.style, 0);
+
+    const d2 = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
+    if (d2 < 320){
+      drawNameTag("Tiểu Bạch", window.wifeNPC.x, window.wifeNPC.y - 42);
+    }
+
+    // bubble thoại
+    if (window.wifeNPC.bubbleT > 0 && window.wifeNPC.bubbleText){
+      drawSpeechBubble(window.wifeNPC.x, window.wifeNPC.y - 60, window.wifeNPC.bubbleText);
+    }
+  }
+
   // vẽ người chơi trong hang
   drawTiger(player.x, player.y, player.face);
   drawFx(dt);
@@ -1306,3 +1334,89 @@ if (nv > 0) {
   posLabel.textContent = `${Math.floor(player.x/TILE)},${Math.floor(player.y/TILE)}`;
 }
 
+
+
+// ===================== NPC text helpers =====================
+function drawNameTag(name, x, y){
+  ctx.save();
+  ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto";
+  const padX = 6, padY = 4;
+  const w = ctx.measureText(name).width + padX*2;
+  const h = 18;
+
+  ctx.globalAlpha = 0.70;
+  ctx.fillStyle = "rgba(0,0,0,.35)";
+  roundRectPath(ctx, x - w/2, y - h, w, h, 8);
+  ctx.fill();
+  ctx.globalAlpha = 0.85;
+  ctx.strokeStyle = "rgba(255,255,255,.16)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = "rgba(255,255,255,.92)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(name, x, y - h/2);
+  ctx.restore();
+}
+
+function drawSpeechBubble(x, y, text){
+  ctx.save();
+  ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+
+  // wrap lines by width
+  const maxW = 260;
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let line = "";
+  for (const w of words){
+    const test = line ? (line + " " + w) : w;
+    if (ctx.measureText(test).width > maxW && line){
+      lines.push(line);
+      line = w;
+    } else {
+      line = test;
+    }
+    if (lines.length >= 3) break;
+  }
+  if (line && lines.length < 3) lines.push(line);
+
+  const padX = 10, padY = 8;
+  const lineH = 16;
+  const boxW = Math.min(maxW, Math.max(...lines.map(s=>ctx.measureText(s).width))) + padX*2;
+  const boxH = lines.length*lineH + padY*2;
+
+  const bx = x - boxW/2;
+  const by = y - boxH;
+
+  ctx.globalAlpha = 0.82;
+  ctx.fillStyle = "rgba(0,0,0,.40)";
+  roundRectPath(ctx, bx, by, boxW, boxH, 12);
+  ctx.fill();
+
+  ctx.globalAlpha = 0.88;
+  ctx.strokeStyle = "rgba(255,255,255,.18)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = "rgba(255,255,255,.92)";
+  for (let i=0;i<lines.length;i++){
+    ctx.fillText(lines[i], bx + padX, by + padY + i*lineH);
+  }
+
+  // small tail
+  ctx.globalAlpha = 0.50;
+  ctx.beginPath();
+  ctx.moveTo(x-8, by+boxH-2);
+  ctx.lineTo(x+8, by+boxH-2);
+  ctx.lineTo(x, by+boxH+10);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(0,0,0,.40)";
+  ctx.fill();
+
+  ctx.restore();
+}

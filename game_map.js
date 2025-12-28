@@ -466,9 +466,9 @@ for (let yy=-4; yy<=4; yy++){
         }
       };
 
-      placeN(Math.floor(2100*density), WO.TREE, 4);
-      placeN(Math.floor(520*density),  WO.BUSH, 5);
-      placeN(Math.floor(340*density),  WO.ROCK, 10);
+      placeN(Math.floor(650*density), WO.TREE, 4); // fewer, larger-looking trees
+      placeN(Math.floor(280*density),  WO.BUSH, 5);
+      placeN(Math.floor(260*density),  WO.ROCK, 10);
 
       // solid calc
       for (let y=0;y<h;y++){

@@ -139,33 +139,62 @@
   }
 
   function drawTree(px, py, s, v){
+    // Large tree look (~2x2 tiles canopy). Trunk collision remains 1 tile (handled in map solid).
+    const shade = (v%16)-8;
+
+    // Shadow (bigger, softer)
     ctx.save();
-    ctx.globalAlpha = 0.22;
+    ctx.globalAlpha = 0.18;
     ctx.fillStyle = "#000";
     ctx.beginPath();
-    ctx.ellipse(px + s*0.52, py + s*0.80, s*0.34, s*0.16, 0, 0, Math.PI*2);
+    ctx.ellipse(px + s*0.52, py + s*0.84, s*0.62, s*0.26, 0, 0, Math.PI*2);
     ctx.fill();
     ctx.restore();
 
+    // Trunk
     const trunkG = ctx.createLinearGradient(px, py, px, py+s);
-    trunkG.addColorStop(0, "#5a3b21");
-    trunkG.addColorStop(1, "#3c2716");
+    trunkG.addColorStop(0, "#6b4526");
+    trunkG.addColorStop(1, "#3a2415");
     ctx.fillStyle = trunkG;
-    ctx.fillRect(px + s*0.46, py + s*0.44, s*0.12, s*0.42);
+    ctx.fillRect(px + s*0.46, py + s*0.52, s*0.14, s*0.44);
 
-    const shade = (v%16)-8;
-    const c1 = `rgb(${18+shade},${92+shade},${34+shade})`;
-    const c2 = `rgb(${14+shade},${72+shade},${28+shade})`;
-
-    ctx.fillStyle = c1;
-    ctx.beginPath(); ctx.arc(px+s*0.50, py+s*0.44, s*0.34, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(px+s*0.34, py+s*0.54, s*0.26, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(px+s*0.66, py+s*0.56, s*0.25, 0, Math.PI*2); ctx.fill();
-
-    ctx.globalAlpha = 0.10;
-    ctx.fillStyle = "#c8ffd9";
-    ctx.beginPath(); ctx.arc(px+s*0.42, py+s*0.38, s*0.16, 0, Math.PI*2); ctx.fill();
+    // Small roots hint
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#2b1a10";
+    ctx.beginPath();
+    ctx.ellipse(px + s*0.52, py + s*0.92, s*0.18, s*0.06, 0, 0, Math.PI*2);
+    ctx.fill();
     ctx.globalAlpha = 1;
+
+    // Canopy colors
+    const cA = `rgb(${22+shade},${108+shade},${42+shade})`;
+    const cB = `rgb(${16+shade},${88+shade},${34+shade})`;
+    const cHi = `rgba(210,255,225,0.10)`;
+
+    // Canopy center lifted upwards and widened
+    const cx = px + s*0.52;
+    const cy = py + s*0.10;
+
+    // Back layer (darker)
+    ctx.fillStyle = cB;
+    ctx.beginPath(); ctx.arc(cx,           cy,           s*0.78, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - s*0.55,  cy + s*0.25,  s*0.62, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + s*0.55,  cy + s*0.28,  s*0.60, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - s*0.15,  cy + s*0.55,  s*0.58, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + s*0.18,  cy + s*0.56,  s*0.56, 0, Math.PI*2); ctx.fill();
+
+    // Front layer (brighter)
+    ctx.fillStyle = cA;
+    ctx.beginPath(); ctx.arc(cx,           cy + s*0.08,  s*0.72, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - s*0.48,  cy + s*0.30,  s*0.56, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + s*0.48,  cy + s*0.32,  s*0.54, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - s*0.10,  cy + s*0.58,  s*0.50, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + s*0.18,  cy + s*0.60,  s*0.48, 0, Math.PI*2); ctx.fill();
+
+    // Highlight specks
+    ctx.fillStyle = cHi;
+    ctx.beginPath(); ctx.arc(cx - s*0.18, cy - s*0.05, s*0.26, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + s*0.22, cy + s*0.18, s*0.22, 0, Math.PI*2); ctx.fill();
   }
 
   // "Bóng cây" dùng cho phần ngoài rìa bản đồ (chỉ nhìn thấy, không tương tác)
@@ -995,6 +1024,49 @@ function drawNightVisionMask(){
   ctx.restore();
   return a;
 }
+
+// ===================== Cinematic overlay (story transitions) =====================
+function drawCinematicOverlay(dt){
+  const o = window.cinematicOverlay;
+  if (!o) return;
+  o.t = (typeof o.t === "number" ? o.t : 0) + dt;
+
+  const dur = Math.max(0.8, (typeof o.dur === "number" ? o.dur : 2.2));
+  const t = o.t;
+
+  const inT  = Math.min(0.42, dur*0.30);
+  const outT = Math.min(0.62, dur*0.35);
+  let k = 1;
+  if (t < inT) k = t / inT;
+  else if (t > dur - outT) k = Math.max(0, (dur - t) / outT);
+  else k = 1;
+
+  const w = window.innerWidth, h = window.innerHeight;
+
+  // fade layer
+  ctx.save();
+  ctx.globalAlpha = 0.72 * k;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,w,h);
+  ctx.restore();
+
+  // title text
+  const text = (o.text || "").toString();
+  if (text){
+    ctx.save();
+    ctx.globalAlpha = 0.92 * k;
+    ctx.fillStyle = "#fff";
+    ctx.font = "800 28px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, w*0.5, h*0.22);
+    ctx.restore();
+  }
+
+  if (t >= dur){
+    try{ delete window.cinematicOverlay; }catch(_){ window.cinematicOverlay = null; }
+  }
+}
   // ===================== FX draw (world space) =====================
   function drawFx(dt){
     for (let i=fx.length-1;i>=0;i--){
@@ -1169,6 +1241,17 @@ if (f.type === "text"){
     drawCarcasses();
 drawAnimals();
 drawRivalTigers();
+
+// Tiểu Bạch đi dạo ban ngày ngoài rừng
+if (window.wifeWorldNPC){
+  drawTigerStyled(window.wifeWorldNPC.x, window.wifeWorldNPC.y, window.wifeWorldNPC.face||0, window.wifeWorldNPC.style||0, 0);
+  const dW = Math.hypot(player.x - window.wifeWorldNPC.x, player.y - window.wifeWorldNPC.y);
+  if (dW < 260) drawNameTag((window.wifeWorldNPC.name||"Tiểu Bạch"), window.wifeWorldNPC.x, window.wifeWorldNPC.y - 42);
+  if (window.wifeWorldNPC.bubbleT > 0 && window.wifeWorldNPC.bubbleText){
+    drawSpeechBubble(window.wifeWorldNPC.x, window.wifeWorldNPC.y - 60, window.wifeWorldNPC.bubbleText);
+  }
+}
+
 // tắt vòng tròn khóa mục tiêu cho giao diện gọn hơn
 // drawLockIndicator();
 drawTiger(player.x, player.y, player.face);
@@ -1199,6 +1282,8 @@ if (nv > 0) {
 }
 
     drawMinimapFor(world, halfW, halfH);
+    // story transition overlay (ở trên tất cả)
+    drawCinematicOverlay(dt);
     posLabel.textContent = `${Math.floor(player.x/TILE)},${Math.floor(player.y/TILE)}`;
   }
 
@@ -1357,6 +1442,8 @@ if (nv > 0) {
 
   // minimap và tọa độ khi ở trong hang
   drawMinimapFor(cave, halfW, halfH);
+  // story transition overlay (ở trên tất cả)
+  drawCinematicOverlay(dt);
   posLabel.textContent = `${Math.floor(player.x/TILE)},${Math.floor(player.y/TILE)}`;
 }
 

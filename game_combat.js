@@ -342,6 +342,12 @@ addFxRing(player.x, player.y, 0.55, radius);
 
   function tryEat(){
     if (locked()) return;
+    // phím F: ưu tiên vuốt ve Tiểu Bạch nếu đang ở gần
+    try{
+      if (window.Story && typeof Story.tryPetWife === "function"){
+        if (Story.tryPetWife()) return;
+      }
+    }catch(_){ }
     // only if near carcass
     let best = null, bestD = 1e9;
     for (const c of carcasses){

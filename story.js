@@ -23,6 +23,36 @@
     eye: "#b7f1ff"
   };
 
+  const WIFE_CHAT_HOME = [
+    "Chàng về rồi... thiếp mừng quá.",
+    "Thiếp chỉ cần chàng bình an là đủ.",
+    "Hôm nay rừng yên ắng... nhưng thiếp vẫn lo.",
+    "Chàng đừng gồng mình nữa... thiếp ở đây.",
+  ];
+  const WIFE_CHAT_DAY = [
+    "Nắng đẹp quá... thiếp muốn ra ngoài một chút.",
+    "Thiếp sẽ đi quanh đây thôi, không xa đâu.",
+    "Chàng nhìn kìa, gió mang mùi cỏ mới.",
+    "Thiếp nhớ chàng... nhưng cũng muốn hít thở ngoài rừng.",
+  ];
+  const WIFE_CHAT_NIGHT = [
+    "Đêm xuống rồi... thiếp hơi sợ.",
+    "Chàng ở đây, thiếp yên tâm hơn.",
+    "Nghe như có tiếng bước chân ngoài kia...",
+  ];
+  const WIFE_GREET = [
+    "Chàng! Chàng ở đây à?",
+    "A... chàng về rồi!",
+    "Thiếp tìm chàng nãy giờ...",
+  ];
+  const WIFE_PET = [
+    "Ơ... chàng làm thiếp ngại quá...",
+    "Hừm... đừng nhìn thiếp như vậy...",
+    "Thiếp... thiếp thích chứ.",
+    "Chàng vuốt nhẹ thôi... thiếp nhột!",
+    "Thiếp nũng nịu một chút thôi nha...",
+  ];
+
   function defaultState(){
     return {
       ver: 1,
@@ -43,13 +73,39 @@
       wolfStage: "", // "", "fight", "return"
       wolfTotal: 0,
       wolfHoldDawn: false,
-      wolfIntroAt: 0,
+      
+      // morning after wolf night
+      wolfMorningDone: false,
+      wolfMorningStage: "", // "", "hunt", "return"
+      wolfMorningFoodGoal: 2,
+      wolfMorningFood: 0,
+
+wolfIntroAt: 0,
+
+      // mark day when wolf night ends
+      wolfNightDayMark: 0,
+
+      // day tracking (để mở nhiệm vụ theo "qua nhiều ngày")
+      dayCount: 0,
+      lastEnvTime: 7,
+      wolfMorningDayMark: 0,
+
+      // intruder tiger quest
+      intruderDone: false,
+      intruderStage: "", // "", "fight", "return"
 
       // for flavor lines
       killsSinceHome: 0,
       lastHomeVisitAt: 0,
       lastWifeTalkAt: 0,
       lastLateWarnAt: 0,
+
+      // petting / affection
+      petCD: 0,
+      affection: 0,
+
+      // resume quest after intruder (if intruder interrupts)
+      resumeQuest: null,
 
       // remember if intro was played
       introDone: false
@@ -277,6 +333,116 @@
     npc.face = Math.atan2(dy, dx);
   }
 
+
+  // ====== Wife in World (ban ngày ra khỏi hang đi dạo) ======
+  function shouldWifeBeOutside(){
+    if (!state.metWife) return false;
+    if (state.questId === "wolf_night") return false;
+    if (scene !== "world") return false;
+        const t = env ? env.time : 12;
+    const day = (t >= 6.8 && t <= 17.8);
+    if (!day) return false;
+
+    // chỉ quanh hang của bạn, và chỉ khi người chơi ở gần (đỡ tốn CPU + đỡ "lạc")
+    if (!world || !world.caveMouth) return false;
+    const mx = world.caveMouth.x*TILE + TILE/2;
+    const my = world.caveMouth.y*TILE + TILE/2;
+    const dp = Math.hypot(player.x - mx, player.y - my);
+    return dp < 1200;
+  }
+
+  function ensureWifeWorldNPC(){
+    if (!shouldWifeBeOutside()){
+      if (window.wifeWorldNPC){
+        try{ delete window.wifeWorldNPC; }catch(_){ window.wifeWorldNPC = null; }
+      }
+      return;
+    }
+    if (scene === "cave") return;
+
+    if (!window.wifeWorldNPC){
+      const mx = world.caveMouth.x*TILE + TILE/2;
+      const my = world.caveMouth.y*TILE + TILE/2;
+      window.wifeWorldNPC = {
+        name: "Tiểu Bạch",
+        x: mx + 120,
+        y: my + 30,
+        r: 12,
+        face: 0,
+        style: WIFE_STYLE,
+        bubbleText: "",
+        bubbleT: 0,
+        // ai
+        tx: mx + 80,
+        ty: my + 40,
+        aiT: 0,
+        greetCD: 0,
+        followT: 0
+      };
+    }
+  }
+
+  function pickWorldWifeTarget(){
+    const mx = world.caveMouth.x*TILE + TILE/2;
+    const my = world.caveMouth.y*TILE + TILE/2;
+    const a = Math.random()*Math.PI*2;
+    const rr = 160 + Math.random()*220;
+    return { x: mx + Math.cos(a)*rr, y: my + Math.sin(a)*rr };
+  }
+
+  function updateWifeWorldAI(dt){
+    const w = window.wifeWorldNPC;
+    if (!w || !world || scene !== "world") return;
+
+    if (w.bubbleT > 0){
+      w.bubbleT = Math.max(0, w.bubbleT - dt);
+      if (w.bubbleT <= 0) w.bubbleText = "";
+    }
+    if (w.greetCD > 0) w.greetCD = Math.max(0, w.greetCD - dt);
+    if (w.followT > 0) w.followT = Math.max(0, w.followT - dt);
+
+    // gặp chồng ngoài rừng: vui vẻ
+    const dP = Math.hypot(player.x - w.x, player.y - w.y);
+    if (dP < 180 && w.greetCD <= 0 && (!queue || queue.length===0)){
+      const line = WIFE_GREET[(Math.random()*WIFE_GREET.length)|0];
+      w.bubbleText = line;
+      w.bubbleT = 2.2;
+      if (toast) toast(`🤍 Tiểu Bạch: ${line}`, 1.0);
+      w.greetCD = 10.0;
+      w.followT = 6.0; // đi theo chồng một lúc
+    }
+
+    // chọn mục tiêu đi dạo / theo chồng
+    w.aiT -= dt;
+    if (w.aiT <= 0){
+      if (w.followT > 0){
+        // theo người chơi nhưng giữ khoảng cách
+        const back = 82;
+        const tx = player.x - Math.cos(player.face)*back;
+        const ty = player.y - Math.sin(player.face)*back;
+        w.tx = tx; w.ty = ty;
+        w.aiT = 0.22;
+      } else {
+        const p = pickWorldWifeTarget();
+        w.tx = p.x; w.ty = p.y;
+        w.aiT = 1.6 + Math.random()*1.6;
+      }
+    }
+
+    // move with world collision (chặn bởi gốc cây/đá)
+    const dx = w.tx - w.x;
+    const dy = w.ty - w.y;
+    const d = Math.hypot(dx,dy) || 0.0001;
+    const sp = (w.followT > 0) ? 92 : 72;
+
+    const nx = w.x + (dx/d)*sp*dt;
+    const ny = w.y + (dy/d)*sp*dt;
+
+    const res = collideResolveCircle(nx, ny, w.r, world, {wade:true});
+    w.x = res.x; w.y = res.y;
+    if (Math.abs(dx)+Math.abs(dy) > 1e-2) w.face = Math.atan2(dy, dx);
+  }
+
   function isHomeCave(){
     return (scene === "cave" && activeCaveRef && activeCaveRef.ownerName === "Bạn");
   }
@@ -355,11 +521,14 @@
       {name:"Dần Ca", text:"Được. Ta ở đây."},
     ], {blocking:true, onDone: ()=>{
       state.huntDone = true;
-      state.questId = "freeplay";
+      state.questId = "wolf_morning";
+      state.wolfMorningStage = "hunt";
+      state.wolfMorningFood = 0;
       state.needReturn = false;
       state.killsSinceHome = 0;
       saveLocal();
-      setQuest("• Sống sót & bảo vệ lãnh thổ\n  (Săn mồi, nghỉ ngơi, đuổi hổ lạ)");
+      setQuest(`• BÌNH MINH: Mang thức ăn về hang\n  Tiến độ: ${state.wolfMorningFood||0}/${state.wolfMorningFoodGoal||2}\n  (Săn ${state.wolfMorningFoodGoal||2} con mồi rồi quay về hang)`);
+      updateMorningQuestText();
       if (toast) toast("Hoàn thành nhiệm vụ mở đầu!", 1.0);
     }});
   }
@@ -392,13 +561,16 @@
     state.questId = "wolf_night";
     state.wolfStage = "fight";
     state.wolfHoldDawn = true;
-    state.wolfTotal = 28; // "mấy chục con" nhưng vẫn tránh lag
+    try{ window.__wolfNightActive = true; }catch(_){ }
+    // Giảm số lượng để đỡ "spam" và tránh kẹt: 3 bầy x 2 con
+    state.wolfPacks = 3;
+    state.wolfTotal = 6;
     state.wolfIntroAt = nowSec();
 
     // spawn đàn sói ngoài cửa hang (ở world)
     try{
       if (typeof spawnQuestWolfRaid === "function"){
-        spawnQuestWolfRaid(state.wolfTotal);
+        spawnQuestWolfRaid(state.wolfPacks, 2);
       }
     }catch(_){}
 
@@ -446,18 +618,159 @@
       {name:"Tiểu Bạch", text:"Chàng nghỉ đi. Thiếp sẽ ở đây chăm sóc chàng."},
     ], {blocking:true, onDone: ()=>{
       state.wolfNightDone = true;
-      state.questId = "freeplay";
+      state.wolfNightDayMark = state.dayCount || 0;
+      state.questId = "wolf_morning";
+      state.wolfMorningStage = "hunt";
+      state.wolfMorningFood = 0;
       state.wolfStage = "";
       state.wolfTotal = 0;
       state.wolfHoldDawn = false;
+      try{ window.__wolfNightActive = false; }catch(_){ }
 
-      setQuest("• Sống sót & bảo vệ lãnh thổ\n  (Săn mồi, nghỉ ngơi, đuổi hổ lạ)");
+      setQuest(`• BÌNH MINH: Mang thức ăn về hang\n  Tiến độ: ${state.wolfMorningFood||0}/${state.wolfMorningFoodGoal||2}\n  (Săn ${state.wolfMorningFoodGoal||2} con mồi rồi quay về hang)`);
+      updateMorningQuestText();
       if (toast) toast("Hoàn thành nhiệm vụ: Đêm sói", 1.1);
       saveLocal();
     }});
   }
 
-  function shouldTriggerWolfNight(){
+  
+  function updateMorningQuestText(){
+    const goal = state.wolfMorningFoodGoal || 2;
+    const got  = state.wolfMorningFood || 0;
+    const ts = nowSec();
+    if (ts - (state.__morningHudAt||0) < 0.55) return;
+    state.__morningHudAt = ts;
+
+    if (state.wolfMorningStage === "hunt"){
+      setQuest(`• BÌNH MINH: Mang thức ăn về hang\n  Tiến độ: ${got}/${goal}\n  (Săn ${goal} con mồi rồi quay về hang)`);
+    } else if (state.wolfMorningStage === "return"){
+      setQuest("• BÌNH MINH: Quay về hang\n  Tiểu Bạch đang đợi bạn");
+    }
+  }
+
+  function finishMorningQuest(){
+    play([
+      {name:"Tiểu Bạch", text:"Chàng về rồi... Thiếp lo quá. Chàng còn đau chỗ nào không?"},
+      {name:"Dần Ca", text:"Không sao. Ta mang chút mồi về đây."},
+      {name:"Tiểu Bạch", text:"Tốt quá... Chàng nghỉ đi. Để thiếp chăm sóc và chuẩn bị thức ăn."},
+    ], {blocking:true, onDone: ()=>{
+      state.wolfMorningDone = true;
+      state.wolfMorningDayMark = state.dayCount || 0;
+      state.questId = "freeplay";
+      state.wolfMorningStage = "";
+      setQuest(`• BÌNH MINH: Mang thức ăn về hang\n  Tiến độ: ${state.wolfMorningFood||0}/${state.wolfMorningFoodGoal||2}\n  (Săn ${state.wolfMorningFoodGoal||2} con mồi rồi quay về hang)`);
+      updateMorningQuestText();
+      if (toast) toast("Hoàn thành nhiệm vụ: Bình Minh", 1.1);
+      saveLocal();
+    }});
+  }
+
+  // ===================== Quest: Hổ lạ xâm nhập (sau vài ngày) =====================
+  
+  function shouldTriggerIntruder(){
+    if (!state.wolfNightDone) return false;
+    if (state.intruderDone) return false;
+    if (scene !== "world") return false;
+
+    // cho phép xen giữa quest buổi sáng (nếu người chơi chưa làm xong), tránh "kẹt vì điều kiện"
+    if (state.questId && !["freeplay","wolf_morning"].includes(state.questId)) return false;
+
+    // ngày hôm sau sau khi kết thúc nhiệm vụ ĐÊM SÓI
+    const dd = (state.dayCount||0) - (state.wolfNightDayMark||0);
+    if (dd < 1) return false;
+
+    // thời gian tương đối rộng để dễ gặp sự kiện (sáng->đêm)
+    const t = env ? env.time : 12;
+    if (t < 9.0 || t > 23.3) return false;
+
+    // phải ở trong lãnh thổ của chính mình
+    try{
+      if (typeof territoryIdAt === "function"){
+        const here = territoryIdAt(player.x, player.y);
+        let homeId = 4;
+        if (typeof territories !== "undefined" && Array.isArray(territories)){
+          const home = territories.find(tt=>tt && tt.isPlayer);
+          if (home) homeId = home.id;
+        }
+        if (here !== homeId) return false;
+      }
+    }catch(_){ }
+
+    // tránh kích hoạt liên tục
+    const ts = nowSec();
+    if (ts - (state.__intruderTryAt||0) < 8) return false;
+    state.__intruderTryAt = ts;
+
+    return true;
+  }
+
+  function startIntruderQuestScene(){
+    // chuyển cảnh + rung nhẹ
+    try{
+      window.cinematicOverlay = { t:0, dur:2.2, text:"HỔ LẠ XÂM NHẬP!" };
+      if (typeof addCameraShake === "function") addCameraShake(18, 0.35);
+    }catch(_){ }
+
+    play([
+      {name:"Tiểu Bạch", text:"Chàng... thiếp cảm thấy có gì đó bất an. Dạo này chàng khác lạ, không còn giận dữ với thiếp nữa..."},
+      {name:"Tiểu Bạch", text:"Nhưng ngoài kia... có tiếng gầm lạ. Một hổ đực khác đang tiến vào lãnh thổ!"},
+      {name:"Hổ Lạ", text:"Hahaha... hổ trắng muốt kia, theo ta! Ta muốn cả đất này!"},
+      {name:"Dần Ca", text:"Ngươi dám! Đây là đất của ta và nàng là vợ ta."},
+      {name:"Hổ Lạ", text:"Dù ta đã có vợ... ta vẫn muốn nàng. Thử cản ta xem!"},
+    ], {blocking:true, onDone: ()=>{
+      // nếu đang làm quest buổi sáng, lưu lại để tiếp tục sau khi đánh lui hổ lạ
+      if (state.questId === "wolf_morning"){
+        state.resumeQuest = {
+          questId: "wolf_morning",
+          wolfMorningStage: state.wolfMorningStage,
+          wolfMorningFood: state.wolfMorningFood,
+          needReturn: state.needReturn
+        };
+      }
+
+      state.questId = "intruder";
+      state.intruderStage = "fight";
+      setQuest("• Hổ lạ xâm nhập lãnh thổ!\n  - Đánh bại Hổ Lạ (Hắc Phong)\n  Tiến độ: 0/1");
+      try{ if (typeof spawnIntruderTiger === "function") spawnIntruderTiger(); }catch(_){ }
+      if (toast) toast("Hổ lạ đã bước vào! Hãy bảo vệ Tiểu Bạch.", 1.15);
+      saveLocal();
+    }});
+  }
+
+  function finishIntruderReturnScene(){
+    play([
+      {name:"Tiểu Bạch", text:"Chàng về rồi! Trời ơi... thiếp sợ lắm. Hắn nhìn thiếp như muốn nuốt chửng..."},
+      {name:"Dần Ca", text:"Không sao. Ta đã đánh lui hắn."},
+      {name:"Tiểu Bạch", text:"Chàng có bị thương không? Để thiếp liếm vết thương cho chàng..."},
+      {name:"Dần Ca", text:"Ở đây với ta. Từ nay ai bước vào lãnh thổ này đều phải trả giá."},
+    ], {blocking:true, onDone: ()=>{
+      state.intruderDone = true;
+      state.intruderStage = "";
+
+      if (state.resumeQuest && state.resumeQuest.questId === "wolf_morning"){
+        // quay lại quest buổi sáng nếu đang dang dở
+        state.questId = "wolf_morning";
+        state.wolfMorningStage = state.resumeQuest.wolfMorningStage || "hunt";
+        state.wolfMorningFood = state.resumeQuest.wolfMorningFood || 0;
+        state.needReturn = !!state.resumeQuest.needReturn;
+        state.resumeQuest = null;
+        updateMorningQuestText();
+      } else {
+        state.questId = "freeplay";
+        setQuest("• Tự do sinh tồn & bảo vệ lãnh thổ");
+      }
+      // thưởng nhẹ
+      if (stats){
+        stats.hp = clamp(stats.hp + 10, 0, stats.hpMax);
+        stats.hunger = clamp(stats.hunger + 10, 0, stats.hungerMax);
+      }
+      if (toast) toast("Hoàn thành: Đuổi hổ lạ", 1.1);
+      saveLocal();
+    }});
+  }
+
+function shouldTriggerWolfNight(){
     if (!state.huntDone) return false;              // phải qua quest mở đầu
     if (state.wolfNightDone) return false;          // chỉ 1 lần
     if (!isHomeCave()) return false;
@@ -480,7 +793,43 @@
     return true;
   }
 
+  function getNearWifeForPet(){
+    // ưu tiên trong hang của bạn
+    if (window.wifeNPC){
+      const d = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
+      if (d < 140) return { w: window.wifeNPC, d, where: "cave" };
+    }
+    if (window.wifeWorldNPC){
+      const d = Math.hypot(player.x - window.wifeWorldNPC.x, player.y - window.wifeWorldNPC.y);
+      if (d < 140) return { w: window.wifeWorldNPC, d, where: "world" };
+    }
+    return null;
+  }
 
+  function tryPetWife(){
+    if (isBlocking()) return false;
+    if (state.petCD > 0) return false;
+    const near = getNearWifeForPet();
+    if (!near) return false;
+
+    const line = WIFE_PET[(Math.random()*WIFE_PET.length)|0];
+    if (near.w){
+      near.w.bubbleText = line;
+      near.w.bubbleT = 2.2;
+      if (toast) toast(`🤍 Tiểu Bạch: ${line}`, 1.0);
+    }
+    state.petCD = 6.0;
+    state.affection = (state.affection||0) + 1;
+
+    // buff nhẹ
+    if (stats){
+      stats.hp = clamp(stats.hp + 3, 0, stats.hpMax);
+      stats.hunger = clamp(stats.hunger + 2, 0, stats.hungerMax);
+    }
+    return true;
+  }
+
+  
   function wifeRandomLine(){
     // ưu tiên cutscene nhiệm vụ "Đêm sói"
     if (state.questId === "wolf_night") return;
@@ -488,8 +837,11 @@
       wolfNightIntroScene();
       return;
     }
+
     const t = env ? env.time : 12;
+    const day = (t >= 7 && t <= 18);
     const late = (t >= 22 || t < 5);
+    const pool = day ? WIFE_CHAT_DAY : (late ? WIFE_CHAT_NIGHT : WIFE_CHAT_HOME);
 
     // tránh nói quá dày
     const ts = nowSec();
@@ -498,18 +850,15 @@
 
     if (!window.wifeNPC) return;
 
+    // đêm khuya: nhắc nhẹ
     if (late && (ts - (state.lastLateWarnAt||0) > 40)){
       state.lastLateWarnAt = ts;
-      const lines = [
-        "Chàng về trễ... thiếp sợ lắm. Lỡ bọn hổ đực lạ rình ngoài kia thì sao?",
-        "Đêm nay lạnh... chàng về rồi, thiếp mới yên tâm.",
-        "Chàng ơi... lần sau chàng đừng đi lâu quá, thiếp lo đến muốn khóc."
-      ];
-      speakWifeBubble(lines[(Math.random()*lines.length)|0]);
+      speakWifeBubble(WIFE_CHAT_NIGHT[(Math.random()*WIFE_CHAT_NIGHT.length)|0]);
       saveLocal();
       return;
     }
 
+    // khen khi chồng vừa săn nhiều
     if ((state.killsSinceHome||0) >= 2){
       const lines = [
         "Nhiều thịt quá... chàng thật mạnh mẽ! Thiếp tự hào về chàng.",
@@ -522,14 +871,11 @@
       return;
     }
 
-    const lines = [
-      "Chàng có mệt không? Thiếp sẽ ở đây chờ chàng.",
-      "Chàng uống chút nước rồi hãy đi. Thiếp lo cho chàng lắm.",
-      "Chàng... thiếp ở trong hang, chàng đừng giận thiếp nữa nhé..."
-    ];
-    speakWifeBubble(lines[(Math.random()*lines.length)|0]);
+    // bình thường: chọn trong pool
+    speakWifeBubble(pool[(Math.random()*pool.length)|0]);
     saveLocal();
   }
+
 
   function onKill(kind, obj){
     // đếm thịt để vợ khen
@@ -546,12 +892,40 @@
       return;
     }
 
+
+    // nhiệm vụ "Bình Minh" (săn mồi mang về hang)
+    if (state.questId === "wolf_morning" && state.wolfMorningStage === "hunt" && kind === "animal" && obj){
+      const t = obj.type;
+      const ok = (t === AnimalType.DEER || t === AnimalType.RABBIT || t === AnimalType.BOAR || t === AnimalType.SQUIRREL);
+      if (ok){
+        state.wolfMorningFood = Math.min(state.wolfMorningFoodGoal||2, (state.wolfMorningFood||0) + 1);
+        updateMorningQuestText();
+        if ((state.wolfMorningFood||0) >= (state.wolfMorningFoodGoal||2)){
+          state.wolfMorningStage = "return";
+          if (toast) toast("Đủ thức ăn! Hãy quay về hang.", 1.0);
+          updateMorningQuestText();
+        }
+        saveLocal();
+        return;
+      }
+    }
+
+    // nhiệm vụ "Hổ lạ xâm nhập"
+    if (state.questId === "intruder" && state.intruderStage === "fight" && kind === "rival" && obj && obj.isIntruder){
+      state.intruderStage = "return";
+      setQuest("• Đã đuổi hổ lạ!\n  - Quay về hang gặp Tiểu Bạch");
+      try{ obj.__despawnT = 6.5; }catch(_){ }
+      if (toast) toast("Hổ lạ bị đánh lui! Về hang thôi.", 1.05);
+      saveLocal();
+      return;
+    }
+
     // nhiệm vụ săn 3
     if (state.questId === "hunt_3" && !state.huntDone){
       state.huntKills = Math.min(state.huntGoal, (state.huntKills||0) + 1);
       if (state.huntKills >= state.huntGoal){
         state.needReturn = true;
-        setQuest("• Quay về hang gặp Tiểu Bạch\n  (Bấm \"Hang\" khi đến cửa hang)");
+        setQuest('• Quay về hang gặp Tiểu Bạch\n  (Bấm "Hang" khi đến cửa hang)');
         if (toast) toast("Đủ thịt rồi! Về hang thôi.", 1.0);
       } else {
         setQuest(`• Săn 3 con thú cho Tiểu Bạch
@@ -610,6 +984,40 @@
         if (window.wifeNPC.bubbleT <= 0) window.wifeNPC.bubbleText = "";
       }
 
+      // pet cooldown
+      if (state.petCD > 0) state.petCD = Math.max(0, state.petCD - dt);
+
+      // wife world npc timers
+      if (window.wifeWorldNPC && window.wifeWorldNPC.bubbleT > 0){
+        window.wifeWorldNPC.bubbleT = Math.max(0, window.wifeWorldNPC.bubbleT - dt);
+        if (window.wifeWorldNPC.bubbleT <= 0) window.wifeWorldNPC.bubbleText = "";
+      }
+
+      // đếm số ngày trôi qua dựa vào env.time (0..24)
+      try{
+        const ct = (context && context.env && typeof context.env.time === "number") ? context.env.time : (env ? env.time : null);
+        if (ct != null){
+          if (typeof state.lastEnvTime !== "number") state.lastEnvTime = ct;
+          if (ct < (state.lastEnvTime - 12)){
+            state.dayCount = (state.dayCount||0) + 1;
+          }
+          state.lastEnvTime = ct;
+        }
+      }catch(_){ }
+
+      // kích hoạt nhiệm vụ hổ lạ ngoài rừng (sau vài ngày)
+      if (shouldTriggerIntruder() && (!queue || queue.length===0)){
+        startIntruderQuestScene();
+      }
+
+      // nếu đang ở giai đoạn đánh hổ lạ mà chưa spawn (ví dụ vừa regen/load), spawn lại
+      if (state.questId === "intruder" && state.intruderStage === "fight" && scene === "world"){
+        try{
+          const has = (typeof rivalTigers !== "undefined" && Array.isArray(rivalTigers)) ? rivalTigers.some(t=>t && t.isIntruder && t.deadT <= 0) : false;
+          if (!has && typeof spawnIntruderTiger === "function") spawnIntruderTiger();
+        }catch(_){ }
+      }
+
 
 
       // wolf quest runtime (đếm sói / giữ trời tối)
@@ -623,6 +1031,31 @@
           }
         }
       }
+
+      // morning quest after wolf night
+      if (state.questId === "wolf_morning"){
+        updateMorningQuestText();
+        if (state.wolfMorningStage === "return" && (!queue || queue.length===0)){
+          if (window.wifeNPC){
+            const d3 = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
+            if (d3 < 220){
+              finishMorningQuest();
+            }
+          }
+        }
+      }
+      // Tiểu Bạch ra khỏi hang ban ngày (world)
+      if (scene === "world"){
+        ensureWifeWorldNPC();
+        if (window.wifeWorldNPC) updateWifeWorldAI(dt);
+      } else {
+        if (window.wifeWorldNPC){
+          try{ delete window.wifeWorldNPC; }catch(_){ window.wifeWorldNPC = null; }
+        }
+      }
+
+
+
 
       // ensure wife exists ONLY in home cave.
       // Fix bug: Tiểu Bạch bị "kẹt" lại và xuất hiện trong hang hổ khác nếu không xoá.
@@ -643,9 +1076,31 @@
 
         // kết thúc nhiệm vụ "Đêm sói" khi đã dọn sạch và quay về hang
         if (state.questId === "wolf_night" && state.wolfStage === "return" && (!queue || queue.length===0)){
-          const d2 = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
-          if (d2 < 220){
-            finishWolfReturnScene();
+          if (window.wifeNPC){
+            const d2 = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
+            if (d2 < 220){
+              finishWolfReturnScene();
+            }
+          }
+        }
+
+        // kết thúc nhiệm vụ "Hổ lạ" khi quay về hang
+        if (state.questId === "intruder" && state.intruderStage === "return" && (!queue || queue.length===0)){
+          if (window.wifeNPC){
+            const d4 = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
+            if (d4 < 220){
+              finishIntruderReturnScene();
+            }
+          }
+        }
+
+        // hoàn thành nhiệm vụ hổ lạ khi quay về hang
+        if (state.questId === "intruder" && state.intruderStage === "return" && (!queue || queue.length===0)){
+          if (window.wifeNPC){
+            const d4 = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
+            if (d4 < 220){
+              finishIntruderReturnScene();
+            }
           }
         }
 
@@ -678,6 +1133,8 @@ onRespawn(){ onRespawnInHome(); },
     },
     advance(){ advance(false); },
     isBlocking(){ return isBlocking(); },
+
+    tryPetWife(){ return tryPetWife(); },
 
     getSaveState(){
       // lưu tiến trình cốt truyện trong save game

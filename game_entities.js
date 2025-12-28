@@ -331,6 +331,32 @@ if (dp < 240){
       if (typeof t.bubbleT !== "number") t.bubbleT = 0;
       if (typeof t.bubbleText !== "string") t.bubbleText = "";
 
+      // Intruder tiger: auto roar + despawn timer support
+      if (t.isIntruder){
+        if (typeof t.__spawnRoarDone !== "boolean") t.__spawnRoarDone = false;
+        if (typeof t.__despawnT !== "number") t.__despawnT = 0;
+        if (t.__despawnT > 0){
+          t.__despawnT = Math.max(0, t.__despawnT - dt);
+          if (t.__despawnT <= 0){
+            // remove from list
+            const idx = rivalTigers.indexOf(t);
+            if (idx >= 0) { rivalTigers.splice(idx, 1); }
+            continue;
+          }
+        }
+        if (!t.__spawnRoarDone){
+          t.__spawnRoarDone = true;
+          const lines = (t.voice && Array.isArray(t.voice.territory) && t.voice.territory.length)
+            ? t.voice.territory
+            : ["Grrr!"];
+          const line = lines[(Math.random()*lines.length)|0];
+          t.bubbleText = line;
+          t.bubbleT = 2.8;
+          showToast(`🐯 ${t.name}: ${line}`, 1.25);
+          if (typeof addCameraShake === "function") addCameraShake(16, 0.35);
+        }
+      }
+
       // timers
       if (t.deadT > 0){
         t.deadT = Math.max(0, t.deadT - dt);
@@ -359,6 +385,18 @@ if (dp < 240){
       const playerInside = inTerritoryPx(player.x, player.y, terr);
       const dToPlayer = Math.hypot(player.x - t.x, player.y - t.y);
 
+      // Nếu có bầy sói xâm nhập lãnh thổ: hổ đực NPC sẽ đánh sói, và sói cũng có thể tấn công lại.
+      // (Điều này hoạt động cho cả sói nhiệm vụ và sói spawn tự nhiên ban đêm.)
+      let wolfThreat = null;
+      try{
+        const nw = nearestWolfInTerritory(terr, t.x, t.y, 560);
+        if (nw && nw.w){
+          wolfThreat = nw.w;
+          // bị sói quấy phá => tăng aggro để nó quay sang phòng thủ
+          t.aggroT = Math.max(t.aggroT, 6.5);
+        }
+      }catch(_){}
+
       // nói chuyện đuổi đánh (mỗi NPC có câu khác nhau)
       if (playerInside && dToPlayer < 360 && t.speakCD <= 0){
         const lines = (t.voice && Array.isArray(t.voice.territory) && t.voice.territory.length)
@@ -378,6 +416,7 @@ if (dp < 240){
 
       let desired = scheduleTigerMode(env.time);
 if (playerInside) desired = "defend";
+if (wolfThreat && !playerInside) desired = "defend";
 if (t.aggroT > 0) desired = "defend";
 if (t.hunger < 25 && desired !== "defend") desired = "hunt";
 if (t.sleep > 80 && desired !== "defend") desired = "rest";
@@ -501,11 +540,13 @@ if (t.hp < t.hpMax*0.25 && desired !== "defend") desired = "rest";
           t.aggroT = Math.max(t.aggroT, 5.5);
         }
       } else if (t.mode === "defend"){
-        // gầm cảnh cáo nếu người chơi mới vào hoặc đang tới gần
-        if (playerInside && dToPlayer < 340) tigerRoar(t);
+        // gầm cảnh cáo nếu người chơi mới vào hoặc đang tới gần (hoặc khi có sói xâm nhập)
+        if ((playerInside && dToPlayer < 340) || (wolfThreat && !playerInside && Math.hypot(wolfThreat.x - t.x, wolfThreat.y - t.y) < 360)) tigerRoar(t);
 
-        const dx = player.x - t.x;
-        const dy = player.y - t.y;
+        const target = (wolfThreat && !playerInside) ? wolfThreat : player;
+
+        const dx = target.x - t.x;
+        const dy = target.y - t.y;
         const d = Math.hypot(dx,dy);
 
         // giữ trong lãnh thổ: nếu player đứng sát rìa, vẫn không đuổi "ra ngoài" quá nhiều
@@ -531,13 +572,21 @@ if (t.hp < t.hpMax*0.25 && desired !== "defend") desired = "rest";
   }
   // tức giận => đánh mạnh hơn
   const mul = (t.enrageT > 0) ? 1.35 : 1.0;
-  dmg = Math.max(1, Math.round(dmg * mul));
+  // boss intruder: mạnh hơn, máu nhiều
+  const bossMul = t.isIntruder ? 1.75 : 1.0;
+  dmg = Math.max(1, Math.round(dmg * mul * bossMul));
   if (mul > 1) label = label.replace(/!+$/, "!!");
+  if (bossMul > 1) label = label.replace(/!+$/, "!!!");
 
-  const adir = Math.atan2(player.y - t.y, player.x - t.x);
+  const adir = Math.atan2(target.y - t.y, target.x - t.x);
   addFxSlash(t.x + Math.cos(adir)*22, t.y + Math.sin(adir)*22, adir, 0.24);
   addFxSlash(t.x + Math.cos(adir)*18, t.y + Math.sin(adir)*18, adir + (Math.random()-0.5)*0.28, 0.18);
-  damagePlayer(dmg, label);
+  if (target && target.type === AnimalType.WOLF){
+    // hổ đực NPC tấn công sói
+    damageAnimal(target, Math.max(10, Math.round(dmg*1.2)));
+  } else {
+    damagePlayer(dmg, label);
+  }
 }
 
         // nếu người chơi rời lãnh thổ => bình tĩnh dần
@@ -928,53 +977,315 @@ function spawnWolfPackNearPlayer(){
 
 
 // Spawn đàn sói "raid" cho nhiệm vụ cốt truyện (ngoài cửa hang của bạn)
-function spawnQuestWolfRaid(total=28){
+
+// Spawn đàn sói "raid" cho nhiệm vụ cốt truyện (rải rác trong lãnh thổ người chơi)
+function spawnQuestWolfRaid(packs=10, perPack=3){
   try{
     if (!world || !world.caveMouth || typeof animals === "undefined") return;
+
+    // tương thích ngược: nếu chỉ truyền 1 số, coi như tổng sói và tự chia bầy
+    if (perPack == null){
+      const total = Math.max(6, packs|0);
+      packs = 10;
+      perPack = Math.max(2, Math.round(total / packs));
+    }
+
+    packs = Math.max(3, packs|0);
+    perPack = Math.max(2, perPack|0);
+
     // xoá sói quest cũ (nếu có)
     for (let i = animals.length-1; i >= 0; i--){
       const a = animals[i];
       if (a && a.type === AnimalType.WOLF && a.questTag === "wolf_night"){
-        animals.splice(i,1);
+        animals.splice(i, 1);
       }
     }
 
-    const px = world.caveMouth.x*TILE + TILE/2;
-    const py = world.caveMouth.y*TILE + TILE/2;
+    const mouth = world.caveMouth;
+    // NOTE: mouth lưu theo TILE (tx,ty). Chuyển sang pixel để tính đúng khoảng cách & lãnh thổ.
+    const mouthPx = { x: mouth.x*TILE + TILE/2, y: mouth.y*TILE + TILE/2 };
 
-    const packs = Math.max(3, Math.min(5, Math.round(total/7)));
-    const baseN = Math.floor(total / packs);
-    let extra = total - baseN * packs;
+    // giới hạn spawn trong lãnh thổ chứa hang của bạn
+    let rect = { x0: 0, y0: 0, x1: world.w*TILE, y1: world.h*TILE };
+    // ưu tiên lãnh thổ của người chơi (tránh lỗi spawn nhầm)
+    try{
+      if (typeof territories !== "undefined" && Array.isArray(territories)){
+        const pt = territories.find(tt => tt && tt.isPlayer);
+        if (pt && pt.px0 != null){
+          rect = { x0: pt.px0, y0: pt.py0, x1: pt.px1, y1: pt.py1 };
+        }
+      }
+    }catch(_){}
+    try{
+      if (typeof territoryIdAt === "function" && typeof getTerritoryById === "function"){
+        const tid = territoryIdAt(mouthPx.x, mouthPx.y);
+        const terr = getTerritoryById(tid);
+        if (terr && terr.px0 != null){
+          rect = { x0: terr.px0, y0: terr.py0, x1: terr.px1, y1: terr.py1 };
+        }
+      }
+    }catch(_){}
 
-    for (let p=0; p<packs; p++){
-      const packN = baseN + (extra>0 ? 1 : 0);
-      if (extra>0) extra--;
+    // spawn quanh hang của người chơi (không sát cửa hang để tránh kẹt)
+    const minFromCave = 170;   // tối thiểu cách cửa hang (px)
+    const ringMinR    = 240;   // bán kính tối thiểu để "rải quanh" (px)
+    const ringMaxR    = 900;   // bán kính tối đa (px)
+    const minBetween  = 260;   // các bầy cách nhau
+    const margin      = 120;   // tránh rìa lãnh thổ
+    const worldW = world.w*TILE;
+    const worldH = world.h*TILE;
 
-      const center = findGrassNear(px, py, 360 + p*35, 820 + p*55, 140);
-      if (!center) continue;
+    function goodTile(tx, ty){
+      if (tx < 2 || ty < 2 || tx >= world.w-2 || ty >= world.h-2) return false;
+      const idx = ty*world.w + tx;
+      if (world.tiles[idx] !== WT.GRASS || world.solid[idx]) return false;
+      // clearance để tránh kẹt vào tường/đá
+      for (let dy=-2; dy<=2; dy++){
+        for (let dx=-2; dx<=2; dx++){
+          const ii = (ty+dy)*world.w + (tx+dx);
+          if (world.solid[ii]) return false;
+        }
+      }
+      return true;
+    }
 
-      const pid = (wolfPackSeq++ + 5000);
-      for (let i=0; i<packN; i++){
+    function pickCenter(tries=260){
+      const x0 = rect.x0 + margin, y0 = rect.y0 + margin;
+      const x1 = rect.x1 - margin, y1 = rect.y1 - margin;
+
+      // ưu tiên rải quanh hang theo vòng tròn để người chơi đi tuần cũng gặp bầy sói
+      for (let i=0; i<tries; i++){
         const ang = Math.random()*Math.PI*2;
-        const rr  = 18 + Math.random()*85;
-        const x = clamp(center.x + Math.cos(ang)*rr, 8, world.w*TILE-8);
-        const y = clamp(center.y + Math.sin(ang)*rr, 8, world.h*TILE-8);
+        const rr  = ringMinR + Math.random()*(ringMaxR - ringMinR);
+        const x   = mouthPx.x + Math.cos(ang)*rr + (Math.random()-0.5)*90;
+        const y   = mouthPx.y + Math.sin(ang)*rr + (Math.random()-0.5)*90;
+
+        if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+        if (Math.hypot(x - mouthPx.x, y - mouthPx.y) < minFromCave) continue;
+
+        const tx = (x / TILE) | 0;
+        const ty = (y / TILE) | 0;
+        if (!goodTile(tx,ty)) continue;
+        return {x,y};
+      }
+
+      // fallback: random trong lãnh thổ nhưng vẫn giữ khoảng cách với hang
+      for (let i=0; i<tries; i++){
+        const x = x0 + Math.random()*(x1-x0);
+        const y = y0 + Math.random()*(y1-y0);
+        if (Math.hypot(x - mouthPx.x, y - mouthPx.y) < ringMinR) continue;
+        const tx = (x / TILE) | 0;
+        const ty = (y / TILE) | 0;
+        if (!goodTile(tx,ty)) continue;
+        return {x,y};
+      }
+
+      return null;
+    }
+
+    const centers = [];
+    for (let p=0; p<packs; p++){
+      let c = null;
+
+      // thử nhiều lần để tránh quá gần các center khác
+      for (let t=0; t<6; t++){
+        c = pickCenter(300);
+        if (!c) break;
+        let ok = true;
+        for (const o of centers){
+          if (Math.hypot(c.x-o.x, c.y-o.y) < minBetween){ ok = false; break; }
+        }
+        if (ok) break;
+        c = null;
+      }
+
+      if (!c){
+        // fallback: vẫn trong lãnh thổ, nới lỏng khoảng cách giữa các bầy
+        for (let i=0; i<520; i++){
+          const x = (rect.x0 + margin) + Math.random()*((rect.x1 - margin) - (rect.x0 + margin));
+          const y = (rect.y0 + margin) + Math.random()*((rect.y1 - margin) - (rect.y0 + margin));
+          if (Math.hypot(x - mouthPx.x, y - mouthPx.y) < ringMinR) continue;
+
+          const tx = (x / TILE) | 0;
+          const ty = (y / TILE) | 0;
+          if (!goodTile(tx,ty)) continue;
+
+          let ok = true;
+          for (const o of centers){
+            if (Math.hypot(x-o.x, y-o.y) < 420){ ok = false; break; }
+          }
+          if (!ok) continue;
+
+          c = {x,y};
+          break;
+        }
+      }
+      if (c) centers.push(c);
+    }
+
+    for (let p=0; p<centers.length; p++){
+      const center = centers[p];
+      const pid = (wolfPackSeq++ + 7000);
+
+      for (let i=0; i<perPack; i++){
+        let x = center.x, y = center.y;
+        let placed = false;
+
+        for (let t=0; t<55; t++){
+          const ang = Math.random()*Math.PI*2;
+          const rr  = 60 + Math.random()*220;
+          const xx  = clamp(center.x + Math.cos(ang)*rr, 8, worldW-8);
+          const yy  = clamp(center.y + Math.sin(ang)*rr, 8, worldH-8);
+          const tx  = (xx / TILE) | 0;
+          const ty  = (yy / TILE) | 0;
+          if (!goodTile(tx,ty)) continue;
+          x = xx; y = yy;
+          placed = true;
+          break;
+        }
+
+        // nếu không tìm được vị trí tốt quanh center, đặt luôn tại center (đã là tile tốt)
+        if (!placed){
+          x = clamp(center.x, 8, worldW-8);
+          y = clamp(center.y, 8, worldH-8);
+        }
 
         const a = spawnWolfAt(x, y, pid, i===0);
         a.questTag = "wolf_night";
-        a.aggroT = Math.max(a.aggroT, 8.0);
-        // nhẹ hơn chút để người chơi có cửa
-        a.hp = Math.round(a.hp * 0.92);
-        a.hpMax = a.hp;
+        a.aggroT   = Math.max(a.aggroT || 0, 10.0);
+        a.hp       = Math.round(a.hp * 0.92);
+        a.hpMax    = a.hp;
       }
     }
 
-    // cập nhật label nếu có
     try{ animalCountLabel.textContent = String(animals.length); }catch(_){}
   }catch(_){}
 }
 
+// ===================== Story boss: Intruder tiger =====================
+// Tạo 1 hổ đực lạ xâm nhập lãnh thổ người chơi. Được đẩy vào mảng rivalTigers
+// để hệ thống khoá mục tiêu/combat hiện có hoạt động luôn.
+function spawnIntruderTiger(){
+  try{
+    if (typeof rivalTigers === "undefined" || !Array.isArray(rivalTigers)) return null;
+    if (!world) return null;
+
+    // nếu đã tồn tại thì tái sử dụng
+    const ex = rivalTigers.find(t => t && t.isIntruder);
+    if (ex){
+      ex.deadT = 0;
+      ex.hp = ex.hpMax;
+      ex.__despawnT = 0;
+      ex.aggroT = Math.max(ex.aggroT||0, 18.0);
+      return ex;
+    }
+
+    const mouth = world.caveMouth;
+    const mouthPx = mouth ? { x: mouth.x*TILE + TILE/2, y: mouth.y*TILE + TILE/2 } : { x: world.w*TILE*0.5, y: world.h*TILE*0.5 };
+
+    // territory của người chơi
+    let terrId = null;
+    let rect = { x0: 0, y0: 0, x1: world.w*TILE, y1: world.h*TILE };
+    try{
+      const playerTerr = (typeof territories !== "undefined" && Array.isArray(territories))
+        ? territories.find(t=>t && t.isPlayer)
+        : null;
+      if (playerTerr){
+        terrId = playerTerr.id;
+        rect = { x0: playerTerr.px0, y0: playerTerr.py0, x1: playerTerr.px1, y1: playerTerr.py1 };
+      } else if (typeof territoryIdAt === "function" && typeof getTerritoryById === "function"){
+        terrId = territoryIdAt(mouthPx.x, mouthPx.y);
+        const terr = getTerritoryById(terrId);
+        if (terr && terr.px0 != null) rect = { x0: terr.px0, y0: terr.py0, x1: terr.px1, y1: terr.py1 };
+      }
+    }catch(_){ }
+    if (terrId == null) terrId = 4;
+
+    // spawn tại rìa lãnh thổ, rồi sẽ tiến vào (đỡ kẹt sát hang)
+    let sx = rect.x1 - 140;
+    let sy = rect.y0 + 240 + Math.random()*Math.max(120, (rect.y1-rect.y0) - 480);
+    try{
+      if (typeof findSafeExitWorldTile === "function"){
+        const st = findSafeExitWorldTile((sx/TILE)|0, (sy/TILE)|0, 80);
+        if (st){ sx = st.x*TILE + TILE/2; sy = st.y*TILE + TILE/2; }
+      }
+    }catch(_){ }
+
+    const intruderName = "Hổ Lạ (Hắc Phong)";
+
+    const t = {
+      isIntruder: true,
+      territoryId: terrId,
+      name: intruderName,
+      ownerName: intruderName,
+
+      // lông tối, khác hẳn các hổ NPC khác
+      palette: { main: "#3a3a3a", dark: "#1b1b1b" },
+
+      x: sx,
+      y: sy,
+      homeX: sx,
+      homeY: sy,
+      r: 18,
+      face: Math.atan2(mouthPx.y - sy, mouthPx.x - sx),
+      vx: 0,
+      vy: 0,
+
+      hpMax: 460,
+      hp: 460,
+      hitFlashT: 0,
+
+      // AI timers
+      mode: "defend",
+      aggroT: 99999,
+      enrageT: 22,
+      attackCD: 0,
+      speakCD: 0,
+      bubbleText: "",
+      bubbleT: 0,
+      deadT: 0,
+
+      voice: {
+        territory: [
+          "Cút khỏi đường ta!",
+          "Đây là đất của ta từ giờ.",
+          "Hổ trắng kia... ta sẽ lấy nàng.",
+          "Đừng hòng giữ nổi lãnh thổ!"
+        ],
+        cave: [
+          "Ra đây! Ta muốn con hổ trắng!",
+          "Ta sẽ phá nát hang của ngươi!"
+        ],
+        mateCall: ["Cứu em!"],
+        worry: ["Cẩn thận!"],
+      },
+
+      __spawnRoarDone: false,
+      __despawnT: 0,
+      __spawnAt: (performance && performance.now) ? performance.now()/1000 : Date.now()/1000,
+    };
+
+    rivalTigers.push(t);
+    return t;
+  }catch(_){
+    return null;
+  }
+}
+
+function despawnIntruderTiger(){
+  try{
+    if (typeof rivalTigers === "undefined" || !Array.isArray(rivalTigers)) return;
+    for (let i=rivalTigers.length-1; i>=0; i--){
+      const t = rivalTigers[i];
+      if (t && t.isIntruder) rivalTigers.splice(i,1);
+    }
+  }catch(_){ }
+}
+
+
 function updateNightWolfSpawns(dt){
+  // Trong nhiệm vụ cốt truyện ĐÊM SÓI, chỉ spawn đúng số sói nhiệm vụ để tránh quá nhiều.
+  try{ if (window && window.__wolfNightActive) return; }catch(_){ }
   if (!isNightTime()){
     // reset nhẹ để lúc vừa vào đêm có chance spawn sớm
     nightWolfSpawnT = Math.min(nightWolfSpawnT, 6);
@@ -1121,6 +1432,36 @@ function damagePlayer(dmg, label){
 
 
   // ===================== Animal update =====================
+
+// ===== Cross-faction combat: wolves <-> rival tigers =====
+function nearestRivalTigerInTerritory(terrId, x, y, maxDist){
+  if (typeof rivalTigers === "undefined" || !Array.isArray(rivalTigers)) return null;
+  let best = null, bestD = maxDist;
+  for (const t of rivalTigers){
+    if (!t || t.deadT > 0) continue;
+    if (terrId != null && t.territoryId !== terrId) continue;
+    const d = Math.hypot(t.x - x, t.y - y);
+    if (d < bestD){
+      bestD = d; best = t;
+    }
+  }
+  return best ? { t: best, d: bestD } : null;
+}
+
+function nearestWolfInTerritory(terr, x, y, maxDist){
+  if (!terr || typeof animals === "undefined" || !animals) return null;
+  let best = null, bestD = maxDist;
+  for (const a of animals){
+    if (!a || a.type !== AnimalType.WOLF) continue;
+    if (a.deadT > 0) continue;
+    if (!inTerritoryPx(a.x, a.y, terr)) continue;
+    const d = Math.hypot(a.x - x, a.y - y);
+    if (d < bestD){
+      bestD = d; best = a;
+    }
+  }
+  return best ? { w: best, d: bestD } : null;
+}
   function updateAnimals(dt){
   // ban đêm: thỉnh thoảng spawn bầy sói
   updateNightWolfSpawns(dt);
@@ -1160,12 +1501,60 @@ function damagePlayer(dmg, label){
 
     // Sói: nếu đi 1 mình thì sợ hổ; chỉ "liều" khi có bầy (và chủ yếu ban đêm)
     const wolfPackSz = isWolf ? packSizeNear(a, 260) : 1;
-    const wolfBrave  = isWolf && isNightTime() && wolfPackSz >= 2;
+    const wolfQuest  = isWolf && a.questTag === "wolf_night";
+    // Sói "liều" khi có bầy (và chủ yếu ban đêm) hoặc khi là sói nhiệm vụ cốt truyện
+    const wolfBrave  = isWolf && (wolfQuest || (isNightTime() && wolfPackSz >= 2));
 
     const isPredator = isBear || wolfBrave;
 
     // bán kính phát hiện riêng cho sói
     const detectP = isWolf ? (wolfBrave ? 330 : 240) : detect;
+
+    // Sói (khi đã "liều") có thể tấn công hổ đực NPC trong cùng lãnh thổ
+    let wolfTiger = null;
+    let wolfTigerD = 1e9;
+    let wolfChaseTiger = false;
+
+    if (isWolf && wolfBrave){
+      const terrIdHere = (typeof territoryIdAt === "function") ? territoryIdAt(a.x, a.y) : null;
+
+      // giữ mục tiêu cũ nếu còn hợp lệ
+      if (a.tigerTarget && a.tigerTarget.deadT <= 0 && (terrIdHere == null || a.tigerTarget.territoryId === terrIdHere)){
+        wolfTiger = a.tigerTarget;
+        wolfTigerD = Math.hypot(wolfTiger.x - a.x, wolfTiger.y - a.y);
+      } else {
+        a.tigerTarget = null;
+        const nt = nearestRivalTigerInTerritory(terrIdHere, a.x, a.y, 420);
+        if (nt && nt.t){
+          wolfTiger = nt.t;
+          wolfTigerD = nt.d;
+        }
+      }
+
+      // nếu hổ ở gần => cả bầy sẽ chuyển sang hăng và lao tới
+      if (wolfTiger && wolfTigerD < 340){
+        a.aggroT = Math.max(a.aggroT, 5.0);
+        a.tigerTarget = wolfTiger;
+
+        if (a.packId){
+          for (const o of animals){
+            if (!o || o.type !== AnimalType.WOLF) continue;
+            if (o.packId !== a.packId) continue;
+            o.aggroT = Math.max(o.aggroT, 4.0);
+            o.tigerTarget = wolfTiger;
+          }
+        }
+      }
+
+      // chọn mục tiêu đuổi: ưu tiên thứ gần hơn (thiên về người chơi một chút nếu cả hai đều gần)
+      if (wolfTiger && wolfTigerD < 520){
+        if (wolfQuest){
+          wolfChaseTiger = true;
+        } else if (wolfTigerD < distP*0.92 && distP > 70){
+          wolfChaseTiger = true;
+        }
+      }
+    }
 
     // phát hiện hổ
     if (isPredator){
@@ -1195,7 +1584,13 @@ function damagePlayer(dmg, label){
       isBear ? 46 :
       isWolf ? 36 : 0;
 
-    if (closeRange > 0 && d < closeRange && a.attackCD <= 0 && !locked()){
+        // Sói cắn hổ đực NPC (nếu đang nhắm đuổi hổ)
+    if (isWolf && wolfChaseTiger && wolfTiger && wolfTigerD < closeRange && a.attackCD <= 0){
+      const dmg = 8;
+      damageRivalTiger(wolfTiger, dmg);
+      a.attackCD = 1.9;
+      a.aggroT = Math.max(a.aggroT || 0, 3.5);
+    } else if (closeRange > 0 && d < closeRange && a.attackCD <= 0 && !locked()){
       let label = "";
       let dmg   = 0;
       if (isBoar){
@@ -1240,8 +1635,19 @@ function damagePlayer(dmg, label){
     if (mode === "chase"){
       const baseSpeed = a.speed;
       const boost = isBear ? 1.05 : (isWolf ? 1.35 : 1.3); // bầy sói đuổi nhanh
-      a.vx = lerp(a.vx, dirPX * baseSpeed * boost, 0.20);
-      a.vy = lerp(a.vy, dirPY * baseSpeed * boost, 0.20);
+
+      // nếu là sói và đang nhắm đuổi hổ đực NPC thì đổi hướng theo hổ, thay vì theo người chơi
+      let tx = player.x, ty = player.y;
+      if (isWolf && wolfChaseTiger && wolfTiger){
+        tx = wolfTiger.x; ty = wolfTiger.y;
+      }
+      const cdx = tx - a.x;
+      const cdy = ty - a.y;
+      const cd  = Math.hypot(cdx, cdy) || 0.0001;
+      const cx  = cdx / cd, cy = cdy / cd;
+
+      a.vx = lerp(a.vx, cx * baseSpeed * boost, 0.20);
+      a.vy = lerp(a.vy, cy * baseSpeed * boost, 0.20);
     } else if (mode === "flee"){
       const awayX = -dirPX;
       const awayY = -dirPY;

@@ -63,6 +63,58 @@
     }
   }
 
+  // ===================== NPC obstacle-avoid movement =====================
+  function stepCircle(map, x, y, r, dx, dy){
+    let nx = x + dx, ny = y;
+    let r1 = collideResolveCircle(nx, ny, r, map);
+    nx = r1.x; ny = r1.y;
+    let nx2 = nx, ny2 = ny + dy;
+    let r2 = collideResolveCircle(nx2, ny2, r, map);
+    return {x:r2.x, y:r2.y};
+  }
+
+  // tránh vật cản kiểu "steering": thử nhiều hướng quanh hướng mong muốn
+  function moveWithObstacleAvoid(map, ent, dt){
+    const sp = Math.hypot(ent.vx, ent.vy);
+    if (sp < 1e-3) return;
+
+    const baseDir = Math.atan2(ent.vy, ent.vx);
+    const angs = [0, 0.28, -0.28, 0.56, -0.56, 0.92, -0.92, 1.22, -1.22, Math.PI];
+
+    let best = null;
+    for (const off of angs){
+      const dir = baseDir + off;
+      const dx = Math.cos(dir) * sp * dt;
+      const dy = Math.sin(dir) * sp * dt;
+      const p = stepCircle(map, ent.x, ent.y, ent.r, dx, dy);
+      const moved = Math.hypot(p.x - ent.x, p.y - ent.y);
+      if (moved < 0.35) continue;
+
+      // score: ưu tiên đi được xa + ít lệch hướng
+      const score = moved - Math.abs(off) * 0.18;
+      if (!best || score > best.score){
+        best = {x:p.x, y:p.y, dir, score};
+      }
+    }
+
+    if (!best){
+      // kẹt hoàn toàn => giảm tốc để đỡ "đâm tường"
+      ent.vx = lerp(ent.vx, 0, 0.25);
+      ent.vy = lerp(ent.vy, 0, 0.25);
+      return;
+    }
+
+    ent.x = best.x;
+    ent.y = best.y;
+
+    // nếu phải rẽ nhiều để né, chỉnh lại hướng chạy
+    const turn = Math.abs(best.dir - baseDir);
+    if (turn > 0.25){
+      ent.vx = Math.cos(best.dir) * sp;
+      ent.vy = Math.sin(best.dir) * sp;
+    }
+  }
+
   function updateRivalTigers(dt){
     if (scene !== "world") return;
 
@@ -247,11 +299,10 @@ if (t.hp < t.hpMax*0.25 && desired !== "defend") desired = "rest";
     dmg = 10;
     label = "Vồ!";
   }
+  const adir = Math.atan2(player.y - t.y, player.x - t.x);
+  addFxSlash(t.x + Math.cos(adir)*22, t.y + Math.sin(adir)*22, adir, 0.24);
+  addFxSlash(t.x + Math.cos(adir)*18, t.y + Math.sin(adir)*18, adir + (Math.random()-0.5)*0.28, 0.18);
   damagePlayer(dmg, label);
-
-  // rung camera nhẹ
-  cam.dragTargetX += (Math.random()-0.5)*14;
-  cam.dragTargetY += (Math.random()-0.5)*14;
 }
 
         // nếu người chơi rời lãnh thổ => bình tĩnh dần
@@ -268,31 +319,8 @@ if (t.hp < t.hpMax*0.25 && desired !== "defend") desired = "rest";
         }
       }
 
-      // apply movement với va chạm & tránh bị kẹt
-const oldX = t.x, oldY = t.y;
-let nx = t.x + t.vx*dt;
-let ny = t.y;
-let r1 = collideResolveCircle(nx, ny, t.r, world);
-nx = r1.x; ny = r1.y;
-let nx2 = nx;
-let ny2 = ny + t.vy*dt;
-let r2 = collideResolveCircle(nx2, ny2, t.r, world);
-const newX = r2.x, newY = r2.y;
-const moved = Math.hypot(newX - oldX, newY - oldY);
-const speedLen = Math.hypot(t.vx, t.vy);
-
-t.x = newX;
-t.y = newY;
-
-// nếu bị tường chặn & hầu như không di chuyển => đổi hướng vòng qua chướng ngại
-if (moved < 0.5 && speedLen > 20){
-  const toPlayerDir = Math.atan2(player.y - t.y, player.x - t.x);
-  const side = (Math.random() < 0.5 ? 1 : -1) * Math.PI/2;
-  const ndir = toPlayerDir + side;
-  const sp = speedLen;
-  t.vx = Math.cos(ndir)*sp*0.9;
-  t.vy = Math.sin(ndir)*sp*0.9;
-}
+            // apply movement với va chạm + né vật cản (đỡ kẹt tường)
+      moveWithObstacleAvoid(world, t, dt);
 
 if (Math.abs(t.vx)+Math.abs(t.vy) > 1e-2){
   t.face = Math.atan2(t.vy, t.vx);
@@ -333,26 +361,18 @@ if (Math.abs(t.vx)+Math.abs(t.vy) > 1e-2){
         dmg = 10;
         label = "Vồ!";
       }
+      const adir = Math.atan2(player.y - t.y, player.x - t.x);
+      addFxSlash(t.x + Math.cos(adir)*22, t.y + Math.sin(adir)*22, adir, 0.24);
+      addFxSlash(t.x + Math.cos(adir)*18, t.y + Math.sin(adir)*18, adir + (Math.random()-0.5)*0.28, 0.18);
       damagePlayer(dmg, label);
-
-      // rung camera
-      cam.dragTargetX += (Math.random()-0.5)*14;
-      cam.dragTargetY += (Math.random()-0.5)*14;
     }
 
     if (t.attackCD > 0) t.attackCD = Math.max(0, t.attackCD - dt);
 
-    // va chạm tường hang
-    let nx2 = t.x + t.vx*dt;
-    let ny2 = t.y;
-    let r1 = collideResolveCircle(nx2, ny2, t.r, cave);
-    nx2 = r1.x; ny2 = r1.y;
-    let nx3 = nx2;
-    let ny3 = ny2 + t.vy*dt;
-    let r2 = collideResolveCircle(nx3, ny3, t.r, cave);
-    t.x = r2.x; t.y = r2.y;
+        // va chạm tường hang + né vật cản (đỡ kẹt tường)
+    moveWithObstacleAvoid(cave, t, dt);
 
-    if (Math.abs(t.vx)+Math.abs(t.vy) > 1e-2){
+if (Math.abs(t.vx)+Math.abs(t.vy) > 1e-2){
       t.face = Math.atan2(t.vy, t.vx);
     }
   }
@@ -551,6 +571,7 @@ const AnimalType = {
   WOLF: "wolf",
 };
 const ANIMAL_COUNT = 320;
+
 // ===================== Night wolves (pack spawn) =====================
 // Ban đêm sẽ thỉnh thoảng sinh ra 1 bầy sói đi theo nhau để săn hổ.
 // Sói đi một mình thì sẽ sợ hổ và thường bỏ chạy.
@@ -612,7 +633,9 @@ function spawnWolfAt(x, y, packId=0, isLeader=false){
     attackCD: 0,
     hp: animalBaseHP(AnimalType.WOLF),
     hpMax: animalBaseHP(AnimalType.WOLF),
+    dom: {t0: Math.random()},
     hitFlashT: 0,
+    // pack
     packId: packId|0,
     isLeader: !!isLeader,
   };
@@ -639,6 +662,7 @@ function spawnWolfPackNearPlayer(){
 
 function updateNightWolfSpawns(dt){
   if (!isNightTime()){
+    // reset nhẹ để lúc vừa vào đêm có chance spawn sớm
     nightWolfSpawnT = Math.min(nightWolfSpawnT, 6);
     return;
   }
@@ -647,6 +671,7 @@ function updateNightWolfSpawns(dt){
   nightWolfSpawnT -= dt;
   if (nightWolfSpawnT <= 0){
     spawnWolfPackNearPlayer();
+    // spawn thưa hơn để không overwhelm
     nightWolfSpawnT = 22 + Math.random()*18; // 22..40s
   }
 }
@@ -765,14 +790,17 @@ function damagePlayer(dmg, label){
   player.invulnT   = 0.7;   // 0.7s miễn sát thương
   player.hitFlashT = 0.25;  // vòng đỏ chớp 1 chút
 
+  // hiệu ứng trúng đòn (mặc định: hướng theo mặt hổ)
+  addFxHitBurst(player.x, player.y, player.face + Math.PI, dmg >= 9 ? 1.55 : 1.15);
+
   addFxText(player.x, player.y - 26, `-${dmg}`, 0.7);
   if (label){
     addFxText(player.x, player.y - 40, label, 0.9);
   }
 
   // rung camera nhẹ
-  cam.dragTargetX += (Math.random()-0.5)*10;
-  cam.dragTargetY += (Math.random()-0.5)*10;
+  cam.dragTargetX += (Math.random()-0.5)*6;
+  cam.dragTargetY += (Math.random()-0.5)*6;
 
   return true;
 }
@@ -780,7 +808,9 @@ function damagePlayer(dmg, label){
 
   // ===================== Animal update =====================
   function updateAnimals(dt){
+  // ban đêm: thỉnh thoảng spawn bầy sói
   updateNightWolfSpawns(dt);
+
   const detect = 210;
   const farSkip = 1200; // map lớn: thú ở xa không cần AI đầy đủ
 
@@ -812,46 +842,37 @@ function damagePlayer(dmg, label){
     const type       = a.type;
     const isBoar     = (type === AnimalType.BOAR);
     const isBear     = (type === AnimalType.BEAR);
-    const isWolf = (type === AnimalType.WOLF);
+    const isWolf     = (type === AnimalType.WOLF);
 
-// Sói: nếu đi 1 mình thì sợ hổ; chỉ "liều" khi có bầy (và chủ yếu ban đêm)
-const wolfPackSz = isWolf ? packSizeNear(a, 260) : 1;
-const wolfBrave  = isWolf && isNightTime() && wolfPackSz >= 2;
+    // Sói: nếu đi 1 mình thì sợ hổ; chỉ "liều" khi có bầy (và chủ yếu ban đêm)
+    const wolfPackSz = isWolf ? packSizeNear(a, 260) : 1;
+    const wolfBrave  = isWolf && isNightTime() && wolfPackSz >= 2;
 
-const isPredator = isBear || wolfBrave;
+    const isPredator = isBear || wolfBrave;
 
-// bán kính phát hiện riêng cho sói
-const detectP = isWolf ? (wolfBrave ? 330 : 240) : detect;
-if (isPredator){
-  if (d < detectP){
-    a.aggroT = Math.max(a.aggroT, 5.0);
-
-    // bầy sói chia sẻ aggro: 1 con thấy -> cả bầy lao tới
-    if (isWolf && a.packId){
-      for (const o of animals){
-        if (o.type !== AnimalType.WOLF) continue;
-        if (o.packId !== a.packId) continue;
-        o.aggroT = Math.max(o.aggroT, 4.0);
-      }
-    }
-  }
-  if (a.hp < a.hpMax){
-    a.aggroT = Math.max(a.aggroT, 7.0);
-  }
-} else {
-  if (d < detectP) a.fleeT = Math.max(a.fleeT, isWolf ? 2.0 : 1.2);
-}
+    // bán kính phát hiện riêng cho sói
+    const detectP = isWolf ? (wolfBrave ? 330 : 240) : detect;
 
     // phát hiện hổ
     if (isPredator){
-      if (d < detect){
+      if (d < detectP){
         a.aggroT = Math.max(a.aggroT, 5.0); // thấy là đuổi
+        // bầy sói chia sẻ aggro: 1 con thấy -> cả bầy lao tới
+        if (isWolf && a.packId){
+          for (const o of animals){
+            if (o.type !== AnimalType.WOLF) continue;
+            if (o.packId !== a.packId) continue;
+            o.aggroT = Math.max(o.aggroT, 4.0);
+          }
+        }
       }
       if (a.hp < a.hpMax){
         a.aggroT = Math.max(a.aggroT, 7.0); // bị đánh càng hăng
       }
     } else {
-      if (d < detect) a.fleeT = Math.max(a.fleeT, 1.2); // nai / thỏ / sóc / heo sợ hổ
+      // nai / thỏ / sóc / heo sợ hổ
+      // sói đi một mình cũng sợ hổ
+      if (d < detectP) a.fleeT = Math.max(a.fleeT, isWolf ? 2.0 : 1.2);
     }
 
     // heo rừng / gấu / sói tấn công cận chiến khi rất gần
@@ -882,6 +903,12 @@ if (isPredator){
           // gấu / sói hăng máu tiếp tục đuổi
           a.aggroT = Math.max(a.aggroT, 3.0);
         }
+
+        // sói đi một mình cắn xong sẽ bỏ chạy ngay
+        if (isWolf && !wolfBrave){
+          a.fleeT = Math.max(a.fleeT, 2.4);
+          a.aggroT = 0;
+        }
       }
     }
 
@@ -898,7 +925,7 @@ if (isPredator){
 
     if (mode === "chase"){
       const baseSpeed = a.speed;
-      const boost = isBear ? 1.05 : 1.3; // sói chạy nhanh hơn
+      const boost = isBear ? 1.05 : (isWolf ? 1.35 : 1.3); // bầy sói đuổi nhanh
       a.vx = lerp(a.vx, dirPX * baseSpeed * boost, 0.20);
       a.vy = lerp(a.vy, dirPY * baseSpeed * boost, 0.20);
     } else if (mode === "flee"){
@@ -909,6 +936,7 @@ if (isPredator){
         (type === AnimalType.DEER)     ? 1.25 :
         (type === AnimalType.SQUIRREL) ? 1.45 :
         (type === AnimalType.BOAR)     ? 1.15 :
+        (type === AnimalType.WOLF)     ? 1.30 :
                                          1.0;
 
       a.vx = lerp(a.vx, awayX * a.speed * boost, 0.22);

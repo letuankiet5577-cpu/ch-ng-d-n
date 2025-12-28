@@ -113,57 +113,25 @@ function advanceClawCombo(){
     showToast("Vồ sẵn sàng! (Chuột trái)", 0.9);
   }
 }
-  // phát hiện thiết bị chạm (để không spam thông báo TAB trên điện thoại)
-function isTouchDevice(){
-  try{
-    if (navigator && typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 0) return true;
-    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return true;
-  }catch(_){}
-  return ("ontouchstart" in window);
-}
-
-function ensureAutoLock(maxD){
-  let tgt = getLockedTarget();
-  if (tgt) return tgt;
-  const cand = pickNearestEnemyToPoint(player.x, player.y, maxD);
-  if (!cand) return null;
-  setLockedTarget(cand.obj, cand.kind);
-  return getLockedTarget();
-}
 
 // chuột trái (tap) => cào chính xác / (đủ combo) => vồ
 function primaryAttackTap(){
+  if (scene !== "world") return;
   if (locked()) return;
 
-  // trong hang: cho phép tấn công hổ chủ hang (không yêu cầu TAB)
-  if (scene === "cave"){
-    useClaw({wide:false});
-    return;
-  }
-
-  if (scene !== "world") return;
-
   if (player.pounceReady){
-    let tgt = getLockedTarget();
+    const tgt = getLockedTarget();
     if (!tgt){
-      // điện thoại: tự khoá mục tiêu gần nhất, không spam TAB
-      if (isTouchDevice()){
-        tgt = ensureAutoLock(220);
-        if (!tgt) return;
-      } else {
-        showToast("Vồ cần khoá mục tiêu (TAB)", 0.9);
-        return;
-      }
+      showToast("Vồ cần khoá mục tiêu (TAB)", 0.9);
+      return;
     }
     player.pounceReady = false;
     player.clawCombo = 0;
     usePounce(true);
     return;
   }
-
   useClaw({wide:false});
 }
-
 
 // giữ chuột trái => cào rộng (bắn 1 lần / lần giữ)
 function updateMouseHoldAttack(nowMs){
@@ -193,19 +161,10 @@ function useClaw(opts={}){
   if (!wide){
     // cào chính xác: chỉ đánh 1 mục tiêu đã khoá
     if (!tgt){
-  if (isTouchDevice()){
-    tgt = ensureAutoLock(170);
-    if (!tgt){
-      cd.claw = 0.12;
-      return false; // im lặng, không toast
+      showToast("Chưa khoá mục tiêu (TAB)", 0.75);
+      cd.claw = 0.25;
+      return false;
     }
-  } else {
-    showToast("Chưa khoá mục tiêu (TAB)", 0.75);
-    cd.claw = 0.25;
-    return false;
-  }
-}
-
 
     const d = Math.hypot(tgt.obj.x - player.x, tgt.obj.y - player.y);
     const range = 62 + (tgt.obj.r||12);
@@ -216,7 +175,9 @@ function useClaw(opts={}){
     }
 
     damageTarget(tgt, 12, null);
-    addFxSlash(player.x + Math.cos(player.face)*22, player.y + Math.sin(player.face)*22, player.face, 0.22);
+    addFxSlash(player.x + Math.cos(player.face)*22, player.y + Math.sin(player.face)*22, player.face, 0.24);
+    addFxSlash(player.x + Math.cos(player.face)*20, player.y + Math.sin(player.face)*20, player.face + 0.28, 0.20);
+    addCameraShake(3.5, 0.08);
     cd.claw = 0.55;
     showToast("Cào!", 0.55);
     advanceClawCombo();
@@ -249,7 +210,9 @@ function useClaw(opts={}){
       tryHit("rival", t);
     }
 
-    addFxSlash(player.x + ax*24, player.y + ay*24, player.face, 0.22);
+    addFxSlash(player.x + ax*24, player.y + ay*24, player.face, 0.24);
+    addFxSlash(player.x + ax*22, player.y + ay*22, player.face - 0.30, 0.20);
+    addCameraShake(4.5, 0.10);
     cd.claw = 0.95;
     showToast(hits>0 ? `Cào rộng! (${hits})` : "Cào rộng trượt!", 0.65);
     advanceClawCombo();
@@ -278,6 +241,7 @@ function useClaw(opts={}){
       const ang = Math.acos(clamp(dot,-1,1));
       if (ang <= cone*0.5){
         damageAnimal(a, 22);
+        addFxHitBurst(a.x, a.y, Math.atan2(a.y - player.y, a.x - player.x), 1.75);
         hit = true;
       }
     }
@@ -294,11 +258,14 @@ function useClaw(opts={}){
       const ang = Math.acos(clamp(dot,-1,1));
       if (ang <= cone*0.5){
         damageRivalTiger(t, 18);
+        addFxHitBurst(t.x, t.y, Math.atan2(t.y - player.y, t.x - player.x), 1.55);
         hit = true;
       }
     }
 
-    addFxSlash(player.x + ax*24, player.y + ay*24, player.face, 0.22);
+    addFxSlash(player.x + ax*24, player.y + ay*24, player.face, 0.24);
+    addFxSlash(player.x + ax*22, player.y + ay*22, player.face - 0.30, 0.20);
+    addCameraShake(4.5, 0.10);
     cd.bite = 1.25;
     showToast(hit ? "Cắn!" : "Cắn trượt!", 0.6);
   }

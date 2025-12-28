@@ -20,125 +20,34 @@
     pointers: new Map(),
     pinch: { active:false, startDist:0, startZoom:1 }
   };
+
   // ===================== World edge block =====================
-// Không cho đi qua rìa map (để sau này mở rộng), nhưng vẫn cho thấy "rừng sâu" bằng fog render.
-let edgeBlockToastT = 0;
-function clampPlayerToWorldBounds(dt){
-  if (scene !== "world") return;
-  const worldW = world.w*TILE;
-  const worldH = world.h*TILE;
-  const pad = 2;
-  const minX = player.r + pad;
-  const minY = player.r + pad;
-  const maxX = worldW - player.r - pad;
-  const maxY = worldH - player.r - pad;
+  // Không cho đi qua rìa map (để sau này mở rộng), nhưng vẫn cho thấy "rừng sâu" bằng fog render.
+  let edgeBlockToastT = 0;
+  function clampPlayerToWorldBounds(dt){
+    if (scene !== "world") return;
+    const worldW = world.w*TILE;
+    const worldH = world.h*TILE;
+    const pad = 2; // đệm nhỏ để khỏi kẹt
+    const minX = player.r + pad;
+    const minY = player.r + pad;
+    const maxX = worldW - player.r - pad;
+    const maxY = worldH - player.r - pad;
 
-  let hit = false;
-  const ox = player.x, oy = player.y;
-  player.x = clamp(player.x, minX, maxX);
-  player.y = clamp(player.y, minY, maxY);
-  if (player.x !== ox || player.y !== oy) hit = true;
+    let hit = false;
+    const ox = player.x, oy = player.y;
+    player.x = clamp(player.x, minX, maxX);
+    player.y = clamp(player.y, minY, maxY);
+    if (player.x !== ox || player.y !== oy) hit = true;
 
-  if (edgeBlockToastT > 0) edgeBlockToastT = Math.max(0, edgeBlockToastT - dt);
-  if (hit && edgeBlockToastT <= 0){
-    showToast("🌫️ Rừng sâu ngoài rìa chưa mở — sẽ khám phá trong tương lai!", 1.2);
-    edgeBlockToastT = 2.0;
+    if (edgeBlockToastT > 0) edgeBlockToastT = Math.max(0, edgeBlockToastT - dt);
+    if (hit && edgeBlockToastT <= 0){
+      showToast("🌫️ Rừng sâu ngoài rìa chưa mở — sẽ khám phá trong tương lai!", 1.2);
+      edgeBlockToastT = 2.0;
+    }
   }
-}
 
   // DOM (mobile)
-  const btnSaveGame  = document.getElementById("btnSaveGame");
-  const btnLoadGame  = document.getElementById("btnLoadGame");
-  const btnClearSave = document.getElementById("btnClearSave");
-  const SAVE_KEY = "save_game_v1";
-
-function buildSaveData(){
-  return {
-    ver: 1,
-    ts: Date.now(),
-    seed: seedInput.value.trim() || "jungle-01",
-    scene,
-    player: { x: player.x, y: player.y, face: player.face },
-    stats: { hp: stats.hp, hunger: stats.hunger, sleep: stats.sleep },
-    env: {
-      time: env.time,
-      weather: env.weather,
-      weatherType: env.weatherType,
-      weatherTimer: env.weatherTimer
-    },
-    caveRef: activeCaveRef ? { territoryId: activeCaveRef.territoryId, ownerName: activeCaveRef.ownerName } : null
-  };
-}
-
-function saveGame(){
-  try{
-    localStorage.setItem(SAVE_KEY, JSON.stringify(buildSaveData()));
-    showToast("Đã lưu game!", 0.8);
-  }catch(_){
-    showToast("Lưu thất bại (bộ nhớ đầy)", 1.0);
-  }
-}
-
-function loadGame(){
-  let raw=null;
-  try{ raw = localStorage.getItem(SAVE_KEY); }catch(_){}
-  if (!raw){ showToast("Chưa có bản lưu", 0.8); return; }
-
-  let data=null;
-  try{ data = JSON.parse(raw); }catch(_){
-    showToast("Bản lưu bị lỗi", 0.9);
-    return;
-  }
-
-  // regen lại map theo seed
-  seedInput.value = data.seed || "jungle-01";
-  generateWorld(seedInput.value);
-  generateCave(seedInput.value);
-
-  // restore env
-  if (data.env){
-    env.time = data.env.time ?? env.time;
-    env.weather = data.env.weather ?? env.weather;
-    env.weatherType = data.env.weatherType ?? env.weatherType;
-    env.weatherTimer = data.env.weatherTimer ?? env.weatherTimer;
-  }
-
-  // restore stats
-  if (data.stats){
-    stats.hp = data.stats.hp ?? stats.hp;
-    stats.hunger = data.stats.hunger ?? stats.hunger;
-    stats.sleep = data.stats.sleep ?? stats.sleep;
-  }
-
-  // restore player
-  if (data.player){
-    player.x = data.player.x ?? player.x;
-    player.y = data.player.y ?? player.y;
-    player.face = data.player.face ?? player.face;
-  }
-
-  // restore scene
-  scene = "world";
-  scenePill.textContent = "Ngoài rừng";
-  miniName.textContent = "Mini Map (Rừng)";
-
-  if (data.scene === "cave" && data.caveRef){
-    // tìm hang đó và vào lại
-    const ref = caveRefs().find(r => r.territoryId === data.caveRef.territoryId);
-    if (ref) enterCave(ref);
-  }
-
-  showToast("Đã tải game!", 0.9);
-}
-
-function clearSave(){
-  try{ localStorage.removeItem(SAVE_KEY); }catch(_){}
-  showToast("Đã xoá bản lưu", 0.8);
-}
-if (btnSaveGame) btnSaveGame.addEventListener("click", saveGame);
-if (btnLoadGame) btnLoadGame.addEventListener("click", loadGame);
-if (btnClearSave) btnClearSave.addEventListener("click", clearSave);
-
   const mobileControls = document.getElementById("mobileControls");
   const joyBase  = document.getElementById("joyBase");
   const joyStick = document.getElementById("joyStick");
@@ -862,7 +771,9 @@ if (player.pounceT > 0){
   let nx2 = nx, ny2 = ny + dy;
   let r2 = collideResolveCircle(nx2, ny2, player.r, world);
   player.x = r2.x; player.y = r2.y;
-  if (scene === "world") clampPlayerToWorldBounds(dt);
+
+  // chặn rìa world (không cho chạy ra ngoài bản đồ)
+  clampPlayerToWorldBounds(dt);
 
   // gây sát thương khi chạm mục tiêu (ưu tiên mục tiêu đã khoá)
   if (!player.pounceHit){
@@ -939,6 +850,8 @@ const dy = ay * sp * dt;
     let nx2 = nx, ny2 = ny + dy;
     let r2 = collideResolveCircle(nx2, ny2, player.r, map);
     player.x = r2.x; player.y = r2.y;
+
+    if (scene === "world") clampPlayerToWorldBounds(dt);
   }
 
   // ===================== UI update =====================
@@ -976,14 +889,14 @@ const dy = ay * sp * dt;
 
   // ===================== Env + Stats update =====================
   function updateEnv(dt){
-  // Khi ngủ: thời gian trôi nhanh hơn (ngủ qua đêm nhanh).
-  // - Ngủ trên ổ rơm: nhanh nhất
-  // - Ngất/forced sleep: nhanh
-  const sleepMult = (player.bedSleep ? 12 : (player.forcedSleepT > 0 ? 9 : 1));
-  const dtEnv = dt * sleepMult;
+    // Khi ngủ: thời gian trôi nhanh hơn (ngủ qua đêm nhanh).
+    // - Ngủ trên ổ rơm: nhanh nhất
+    // - Ngất/forced sleep: nhanh
+    const sleepMult = (player.bedSleep ? 12 : (player.forcedSleepT > 0 ? 9 : 1));
+    const dtEnv = dt * sleepMult;
 
-  env.time += (env.speed * dtEnv) * 0.25;
-  while (env.time >= 24) env.time -= 24;
+    env.time += (env.speed * dtEnv) * 0.25;
+    while (env.time >= 24) env.time -= 24;
 
     env.weatherTimer -= dtEnv;
     if (env.weatherTimer <= 0){

@@ -12,17 +12,53 @@
       ctx.fillStyle = grassColor(v);
       ctx.fillRect(px,py,TILE,TILE);
 
-      const n = 4 + (v % 5);
-      ctx.globalAlpha = 0.12;
+      // thêm lớp ánh sáng/đổ bóng nhẹ để mặt đất trông "tỉ mỉ" hơn (không dùng gradient cho nhanh)
+      const shade = ((v % 11) - 5) * 0.006; // -0.03..0.03
+      ctx.globalAlpha = 0.09 + Math.abs(shade)*2.0;
+      ctx.fillStyle = (shade >= 0) ? "#ffffff" : "#000000";
+      ctx.fillRect(px, py, TILE, TILE*0.45);
+      ctx.globalAlpha = 0.06;
+      ctx.fillRect(px, py + TILE*0.55, TILE, TILE*0.45);
+      ctx.globalAlpha = 1;
+
+      // hạt lá/đốm đất ngẫu nhiên theo tile (deterministic)
+      const n = 6 + (v % 7);
+      ctx.globalAlpha = 0.14;
       for (let i=0;i<n;i++){
         const sx = px + ((v + i*37) % TILE);
         const sy = py + ((v*3 + i*29) % TILE);
-        ctx.fillStyle = (i%2===0) ? "#08110b" : "#143a1f";
+        ctx.fillStyle = (i%3===0) ? "#08110b" : (i%3===1 ? "#143a1f" : "#0c2414");
         ctx.fillRect(sx, sy, 2, 2);
       }
       ctx.globalAlpha = 1;
 
-      ctx.globalAlpha = 0.08;
+      // vài bụi cỏ (hiếm) để nhìn sinh động hơn
+      if ((v % 7) === 0){
+        ctx.globalAlpha = 0.18;
+        ctx.strokeStyle = "#0a2a12";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const x0 = px + (TILE*0.25 + (v%5)*2);
+        const y0 = py + TILE*0.70;
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(x0 + 6, y0 - 10, x0 + 10, y0 - 20);
+        ctx.moveTo(x0 + 12, y0);
+        ctx.quadraticCurveTo(x0 + 18, y0 - 8, x0 + 20, y0 - 18);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // hoa nhỏ (rất hiếm)
+      if ((v % 41) === 0){
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle = "#d8ffd5";
+        ctx.fillRect(px + TILE*0.62, py + TILE*0.32, 2, 2);
+        ctx.fillRect(px + TILE*0.66, py + TILE*0.34, 2, 2);
+        ctx.globalAlpha = 1;
+      }
+
+      // viền tối nhẹ để tile bớt "phẳng"
+      ctx.globalAlpha = 0.06;
       ctx.fillStyle = "#000";
       ctx.fillRect(px, py, TILE, 1);
       ctx.fillRect(px, py, 1, TILE);
@@ -31,16 +67,39 @@
     }
 
     if (t === WT.RIVER){
-      const g = ctx.createLinearGradient(px, py, px, py+TILE);
-      g.addColorStop(0, "#0b2d42");
-      g.addColorStop(1, "#0f5077");
-      ctx.fillStyle = g;
+      // màu nước + chiều sâu
+      ctx.fillStyle = "#0f4767";
       ctx.fillRect(px,py,TILE,TILE);
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = "#061b2a";
+      ctx.fillRect(px, py + TILE*0.55, TILE, TILE*0.45);
+      ctx.globalAlpha = 1;
 
-      const phase = (time*0.9 + (tx*0.12) + (ty*0.08)) % 1;
-      ctx.globalAlpha = 0.22;
+      // gợn sóng (animate)
+      const ph = time*1.15 + tx*0.15 + ty*0.09;
+      ctx.globalAlpha = 0.18;
       ctx.fillStyle = "#bfefff";
-      ctx.fillRect(px + TILE*(0.15 + 0.20*phase), py + TILE*0.15, TILE*0.08, TILE*0.70);
+      const y1 = py + ((ph*0.55) % 1) * TILE;
+      const y2 = py + (((ph*0.55) + 0.5) % 1) * TILE;
+      ctx.fillRect(px, y1, TILE, 1);
+      ctx.fillRect(px, y2, TILE, 1);
+
+      // vệt sáng trôi dọc (như phản chiếu)
+      const phase = (ph*0.22) % 1;
+      ctx.globalAlpha = 0.22;
+      ctx.fillRect(px + TILE*(0.10 + 0.26*phase), py + TILE*0.12, TILE*0.08, TILE*0.76);
+
+      // bọt nước ở mép bờ (khi cạnh cỏ)
+      const nb = (xx,yy)=>{
+        if (xx<0||yy<0||xx>=world.w||yy>=world.h) return WT.MOUNTAIN;
+        return world.tiles[yy*world.w + xx];
+      };
+      ctx.globalAlpha = 0.28;
+      if (nb(tx-1,ty) !== WT.RIVER) ctx.fillRect(px, py, 2, TILE);
+      if (nb(tx+1,ty) !== WT.RIVER) ctx.fillRect(px + TILE - 2, py, 2, TILE);
+      if (nb(tx,ty-1) !== WT.RIVER) ctx.fillRect(px, py, TILE, 2);
+      if (nb(tx,ty+1) !== WT.RIVER) ctx.fillRect(px, py + TILE - 2, TILE, 2);
+
       ctx.globalAlpha = 1;
       return;
     }

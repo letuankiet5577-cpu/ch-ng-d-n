@@ -79,6 +79,7 @@
 
     <div id="actionWrap" aria-label="Actions">
       <button class="mBtn" id="btnAttack" type="button">Tấn công</button>
+      <button class="mBtn" id="btnUse" type="button" style="display:none">Dùng</button>
       <button class="mBtn" id="btnSprint" type="button">Chạy</button>
       <button class="mBtn" id="btnLock" type="button">Khoá</button>
       <button class="mBtn" id="btnEnter" type="button">Hang</button>
@@ -106,6 +107,13 @@
             <span><b>UI nhỏ</b> (điện thoại: ít che màn)</span>
           </label>
         </div>
+        <div class="setRow">
+          <label class="setLabel">
+            <input type="checkbox" id="setFarView">
+            <span><b>Tầm nhìn xa</b> (điện thoại: nhìn rộng hơn)</span>
+          </label>
+        </div>
+
 
         <div class="setRow">
           <label class="setLabel">
@@ -121,6 +129,19 @@
         </div>
 
         <div class="divider"></div>
+
+
+        <details>
+          <summary>Lưu game</summary>
+          <div class="helpText">
+            <div class="rowBtns">
+              <button class="mBtn2" id="btnSaveGame" type="button">Lưu</button>
+              <button class="mBtn2" id="btnLoadGame" type="button">Tải</button>
+              <button class="mBtn2" id="btnClearSave" type="button">Xoá lưu</button>
+            </div>
+            <div class="muted" style="margin-top:8px">Lưu vào bộ nhớ máy (localStorage). Chia sẻ link vẫn chơi được, nhưng dữ liệu lưu là theo thiết bị.</div>
+          </div>
+        </details>
 
         <details open>
           <summary>Hướng dẫn (Điện thoại)</summary>

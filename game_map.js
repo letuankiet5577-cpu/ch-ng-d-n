@@ -373,6 +373,7 @@ for (let yy=-4; yy<=4; yy++){
           let s=0;
           const t = tiles[i];
           const o = objects[i];
+          if (t === WT.RIVER) s = 1;
           if (t === WT.MOUNTAIN || t === WT.MOUNTAIN_EDGE) s = 1;
           if (o === WO.TREE || o === WO.ROCK) s = 1;
           solid[i] = s;
@@ -474,6 +475,7 @@ const homeY = safeHome.ty*TILE + TILE/2;
         y: homeY + (baseRand()-0.5)*12,
         homeX, homeY,
         r: 18,
+        canWade: true,
         face: baseRand()*Math.PI*2,
         vx: 0, vy: 0,
         hp: 120, hpMax: 120,

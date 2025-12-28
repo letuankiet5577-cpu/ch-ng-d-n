@@ -131,7 +131,7 @@
   }
 
   // ===================== Collision =====================
-  function collideResolveCircle(px, py, r, map){
+  function collideResolveCircle(px, py, r, map, opt){
     const mw = map.w, mh = map.h;
     const solid = map.solid;
 
@@ -146,6 +146,9 @@
       for (let tx=minTX; tx<=maxTX; tx++){
         const i = ty*mw + tx;
         if (!solid[i]) continue;
+
+        // cho phép hổ lội qua sông/suối (river) nhưng các loài khác bị chặn
+        if (opt && opt.wade && map === world && map.tiles && map.tiles[i] === WT.RIVER) continue;
 
         let or = TILE*0.50;
         if (map === world && map.objects){

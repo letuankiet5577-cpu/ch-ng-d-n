@@ -52,6 +52,7 @@
   const joyBase  = document.getElementById("joyBase");
   const joyStick = document.getElementById("joyStick");
   const btnAttack = document.getElementById("btnAttack");
+  const btnUse    = document.getElementById("btnUse");
   const btnSprint = document.getElementById("btnSprint");
   const btnLock   = document.getElementById("btnLock");
   const btnEnter  = document.getElementById("btnEnter");
@@ -68,6 +69,11 @@
   const setShowHint     = document.getElementById("setShowHint");
   const setShowMinimap  = document.getElementById("setShowMinimap");
   const setSmallUI      = document.getElementById("setSmallUI");
+  const setFarView      = document.getElementById("setFarView");
+
+  const btnSaveGame     = document.getElementById("btnSaveGame");
+  const btnLoadGame     = document.getElementById("btnLoadGame");
+  const btnClearSave    = document.getElementById("btnClearSave");
 
   const miniPanel = document.getElementById("miniPanel");
 
@@ -98,7 +104,7 @@
 
   // Nếu đã từng dùng bản cũ, localStorage có thể giữ UI to/hint bật.
   // Tăng version để reset mặc định hợp lý cho điện thoại.
-  const UI_VERSION = "4";
+  const UI_VERSION = "5";
   const storedVer = (()=>{ try{return localStorage.getItem("ui_version");}catch(_){return null;} })();
   const touchNow = isTouchDevice() || window.innerWidth < 760;
 
@@ -107,7 +113,26 @@
     smallUI: loadBool("ui_smallUI", defaultHudMini),
     showHint: loadBool("ui_showHint", !defaultHudMini),
     showMinimap: loadBool("ui_showMinimap", true),
+    farView: loadBool("ui_farView", defaultHudMini),
   };
+
+  // Zoom mặc định: mobile nhìn rộng hơn (đỡ bị quá gần)
+  let zoomTouched = false;
+  function getDefaultZoom(){
+    const touch = isTouchDevice() || window.innerWidth < 760;
+    if (touch){
+      return uiState.farView ? 0.78 : 0.92;
+    }
+    return 1.05;
+  }
+  function applyDefaultZoomIfNeeded(force=false){
+    // chỉ set khi chưa bị người chơi zoom/pinch thủ công, hoặc khi force
+    try{
+      if (force || !zoomTouched){
+        cam.zoom = getDefaultZoom();
+      }
+    }catch(_){ }
+  }
 
   // Reset 1 lần khi version đổi để tránh trạng thái cũ (UI to/hint bật) làm che màn.
   if (storedVer !== UI_VERSION){
@@ -117,12 +142,14 @@
       uiState.smallUI = true;
       uiState.showHint = false;
       uiState.showMinimap = true;
+      uiState.farView = true;
     }
     try{ localStorage.setItem("ui_version", UI_VERSION); }catch(_){ }
     saveBool("ui_hudMini", uiState.hudMini);
     saveBool("ui_smallUI", uiState.smallUI);
     saveBool("ui_showHint", uiState.showHint);
     saveBool("ui_showMinimap", uiState.showMinimap);
+    saveBool("ui_farView", uiState.farView);
   }
 
   function applyUI(){
@@ -139,6 +166,10 @@
     if (setShowHint) setShowHint.checked = !!uiState.showHint;
     if (setShowMinimap) setShowMinimap.checked = !!uiState.showMinimap;
     if (setSmallUI) setSmallUI.checked = !!uiState.smallUI;
+    if (setFarView) setFarView.checked = !!uiState.farView;
+
+    // áp dụng tầm nhìn mặc định cho mobile (nếu chưa pinch/zoom thủ công nhiều)
+    applyDefaultZoomIfNeeded();
   }
 
   function openSettings(){
@@ -151,6 +182,156 @@
     settingsOverlay.classList.remove("show");
     settingsOverlay.setAttribute("aria-hidden", "true");
   }
+
+  // ===================== Save / Load game =====================
+  const SAVE_KEY = "territory_split_save_v1";
+
+  function buildSaveData(){
+    const seed = (seedInput && seedInput.value) ? seedInput.value.trim() : "jungle-01";
+    const data = {
+      ver: 1,
+      at: Date.now(),
+      seed,
+      scene,
+      activeCaveTerritoryId: (activeCaveRef && activeCaveRef.territoryId) ? activeCaveRef.territoryId : null,
+      player: {
+        x: player.x, y: player.y, face: player.face,
+        forcedSleepT: player.forcedSleepT||0,
+        bedSleep: !!player.bedSleep,
+        pounceT: player.pounceT||0
+      },
+      stats: {
+        hp: stats.hp, hpMax: stats.hpMax,
+        hunger: stats.hunger, hungerMax: stats.hungerMax,
+        sleep: stats.sleep, sleepMax: stats.sleepMax
+      },
+      env: {
+        time: env.time,
+        weatherTimer: env.weatherTimer,
+        weatherType: env.weatherType,
+        weather: env.weather
+      },
+      rivals: rivalTigers.map(t=>({
+        territoryId: t.territoryId,
+        x: t.x, y: t.y,
+        hp: t.hp, hunger: t.hunger, sleep: t.sleep,
+        mode: t.mode, deadT: t.deadT||0,
+        aggroT: t.aggroT||0, stunnedT: t.stunnedT||0
+      })),
+      carcasses: carcasses.map(c=>({x:c.x, y:c.y, meat:c.meat, ttl:c.ttl}))
+    };
+    return data;
+  }
+
+  function applySaveData(data){
+    if (!data) return;
+    // stats + env
+    if (data.stats){
+      stats.hp = clamp(data.stats.hp ?? stats.hp, 0, stats.hpMax);
+      stats.hunger = clamp(data.stats.hunger ?? stats.hunger, 0, stats.hungerMax);
+      stats.sleep = clamp(data.stats.sleep ?? stats.sleep, 0, stats.sleepMax);
+    }
+    if (data.env){
+      env.time = (typeof data.env.time === "number") ? data.env.time : env.time;
+      env.weatherTimer = (typeof data.env.weatherTimer === "number") ? data.env.weatherTimer : env.weatherTimer;
+      env.weatherType = data.env.weatherType || env.weatherType;
+      env.weather = data.env.weather || env.weather;
+    }
+
+    // rivals
+    if (Array.isArray(data.rivals)){
+      for (const rs of data.rivals){
+        const t = rivalTigers.find(x=>x.territoryId === rs.territoryId);
+        if (!t) continue;
+        if (typeof rs.x === "number") t.x = rs.x;
+        if (typeof rs.y === "number") t.y = rs.y;
+        if (typeof rs.hp === "number") t.hp = clamp(rs.hp, 1, t.hpMax);
+        if (typeof rs.hunger === "number") t.hunger = clamp(rs.hunger, 0, t.hungerMax);
+        if (typeof rs.sleep === "number") t.sleep = clamp(rs.sleep, 0, t.sleepMax);
+        if (rs.mode) t.mode = rs.mode;
+        if (typeof rs.deadT === "number") t.deadT = rs.deadT;
+        if (typeof rs.aggroT === "number") t.aggroT = rs.aggroT;
+        if (typeof rs.stunnedT === "number") t.stunnedT = rs.stunnedT;
+      }
+    }
+
+    // carcasses
+    if (Array.isArray(data.carcasses)){
+      carcasses.length = 0;
+      for (const c of data.carcasses){
+        if (!c || typeof c.x !== "number" || typeof c.y !== "number") continue;
+        carcasses.push({x:c.x, y:c.y, meat: (c.meat??0), ttl: (c.ttl??120)});
+      }
+    }
+
+    // player
+    if (data.player){
+      if (typeof data.player.x === "number") player.x = data.player.x;
+      if (typeof data.player.y === "number") player.y = data.player.y;
+      if (typeof data.player.face === "number") player.face = data.player.face;
+      player.forcedSleepT = data.player.forcedSleepT||0;
+      player.bedSleep = !!data.player.bedSleep;
+      player.pounceT = data.player.pounceT||0;
+    }
+
+    // camera
+    cam.x = player.x; cam.y = player.y;
+  }
+
+  function saveGame(){
+    try{
+      const data = buildSaveData();
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      showToast("✅ Đã lưu game", 0.9);
+    }catch(e){
+      showToast("Không thể lưu (trình duyệt chặn bộ nhớ)", 1.2);
+      console.error(e);
+    }
+  }
+
+  function loadGame(){
+    let data = null;
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw){
+        showToast("Chưa có dữ liệu lưu", 0.9);
+        return;
+      }
+      data = JSON.parse(raw);
+    }catch(e){
+      showToast("Save bị lỗi / không đọc được", 1.1);
+      console.error(e);
+      return;
+    }
+
+    // regen theo seed
+    try{
+      if (seedInput && data.seed) seedInput.value = data.seed;
+    }catch(_){}
+    regen(); // tạo lại world/cave base
+
+    // quay lại scene đã lưu
+    if (data.scene === "cave" && data.activeCaveTerritoryId != null){
+      const ref = caveRefs().find(r => r.territoryId === data.activeCaveTerritoryId);
+      if (ref) enterCave(ref);
+    } else {
+      scene = "world";
+      activeCaveRef = null;
+    }
+
+    applySaveData(data);
+    showToast("📥 Đã tải game", 1.0);
+  }
+
+  function clearSave(){
+    try{
+      localStorage.removeItem(SAVE_KEY);
+      showToast("🗑️ Đã xoá save", 0.9);
+    }catch(_){
+      showToast("Không thể xoá save", 0.9);
+    }
+  }
+
 
   if (hudToggleBtn){
     hudToggleBtn.addEventListener("click", ()=>{
@@ -167,6 +348,10 @@
   if (settingsClose){
     settingsClose.addEventListener("click", closeSettings);
   }
+  if (btnSaveGame) btnSaveGame.addEventListener("click", saveGame);
+  if (btnLoadGame) btnLoadGame.addEventListener("click", loadGame);
+  if (btnClearSave) btnClearSave.addEventListener("click", clearSave);
+
   if (settingsOverlay){
     settingsOverlay.addEventListener("click", (e)=>{
       if (e.target === settingsOverlay) closeSettings();
@@ -206,6 +391,7 @@
     setShowMinimap.addEventListener("change", ()=>{
       uiState.showMinimap = setShowMinimap.checked;
       saveBool("ui_showMinimap", uiState.showMinimap);
+    saveBool("ui_farView", uiState.farView);
       applyUI();
     });
   }
@@ -218,6 +404,19 @@
       showToast(uiState.smallUI ? "UI: NHỎ" : "UI: MẶC ĐỊNH", 0.9);
     });
   }
+
+  if (setFarView){
+    setFarView.addEventListener("change", ()=>{
+      uiState.farView = !!setFarView.checked;
+      saveBool("ui_farView", uiState.farView);
+      // đổi tầm nhìn => reset zoom mặc định
+      zoomTouched = false;
+      applyDefaultZoomIfNeeded(true);
+      applyUI();
+      showToast(uiState.farView ? "Tầm nhìn: XA" : "Tầm nhìn: GẦN", 0.9);
+    });
+  }
+
 
   applyUI();
 
@@ -395,7 +594,8 @@
       const pts = [...mobileCtl.pointers.values()];
       const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
       const ratio = (mobileCtl.pinch.startDist > 1e-6) ? (d / mobileCtl.pinch.startDist) : 1;
-      cam.zoom = clamp(mobileCtl.pinch.startZoom * ratio, 0.70, 1.90);
+      cam.zoom = clamp(mobileCtl.pinch.startZoom * ratio, 0.55, 1.80);
+      zoomTouched = true;
       return;
     }
     updateMouseWorld(e);
@@ -681,7 +881,7 @@ function exitCave(){
   player.y = safe.ty*TILE + TILE/2;
 
   // đẩy ra khỏi mép núi nếu spawn sát tường
-  const rr = collideResolveCircle(player.x, player.y, player.r, world);
+  const rr = collideResolveCircle(player.x, player.y, player.r, world, {wade:true});
   player.x = rr.x; player.y = rr.y;
 
   player.bedSleep = false;
@@ -765,11 +965,11 @@ if (player.pounceT > 0){
   const dy = ay * sp * dt;
 
   let nx = player.x + dx, ny = player.y;
-  let r1 = collideResolveCircle(nx, ny, player.r, world);
+  let r1 = collideResolveCircle(nx, ny, player.r, world, {wade:true});
   nx = r1.x; ny = r1.y;
 
   let nx2 = nx, ny2 = ny + dy;
-  let r2 = collideResolveCircle(nx2, ny2, player.r, world);
+  let r2 = collideResolveCircle(nx2, ny2, player.r, world, {wade:true});
   player.x = r2.x; player.y = r2.y;
 
   // chặn rìa world (không cho chạy ra ngoài bản đồ)
@@ -813,8 +1013,8 @@ if (player.pounceT > 0){
     ax += mobileCtl.joyX;
     ay += mobileCtl.joyY;
 
-    if (keys.has("q")) cam.zoom = clamp(cam.zoom - 0.02, 0.70, 1.90);
-    if (keys.has("e")) cam.zoom = clamp(cam.zoom + 0.02, 0.70, 1.90);
+    if (keys.has("q")) { cam.zoom = clamp(cam.zoom - 0.02, 0.55, 1.80); zoomTouched = true; }
+    if (keys.has("e")) { cam.zoom = clamp(cam.zoom + 0.02, 0.55, 1.80); zoomTouched = true; }
 
     if (ax!==0 || ay!==0){
       const len = Math.hypot(ax,ay);
@@ -844,11 +1044,11 @@ const dy = ay * sp * dt;
 
 
     let nx = player.x + dx, ny = player.y;
-    let r1 = collideResolveCircle(nx, ny, player.r, map);
+    let r1 = collideResolveCircle(nx, ny, player.r, map, (map===world?{wade:true}:null));
     nx = r1.x; ny = r1.y;
 
     let nx2 = nx, ny2 = ny + dy;
-    let r2 = collideResolveCircle(nx2, ny2, player.r, map);
+    let r2 = collideResolveCircle(nx2, ny2, player.r, map, (map===world?{wade:true}:null));
     player.x = r2.x; player.y = r2.y;
 
     if (scene === "world") clampPlayerToWorldBounds(dt);
@@ -968,6 +1168,58 @@ function respawn(){
     }
     return { c: best, d: bestD };
   }
+
+
+  // Nút ngữ cảnh trên điện thoại: gần ổ rơm => Ngủ / Dậy, gần xác => Ăn
+  function updateContextButton(){
+    if (!btnUse) return;
+
+    const touch = isTouchDevice() || window.innerWidth < 760;
+    if (!touch){
+      btnUse.style.display = "none";
+      btnUse.dataset.mode = "";
+      return;
+    }
+
+    let mode = "";
+    let label = "";
+
+    // ưu tiên ngủ trong hang
+    if (scene === "cave" && typeof nearBed === "function" && nearBed()){
+      mode = "sleep";
+      label = player.bedSleep ? "Dậy" : "Ngủ";
+    } else {
+      const nc = nearestCarcassInfo();
+      if (nc.c && nc.d <= 60 && nc.c.meat > 0){
+        mode = "eat";
+        label = "Ăn";
+      }
+    }
+
+    if (!mode){
+      btnUse.style.display = "none";
+      btnUse.dataset.mode = "";
+      return;
+    }
+
+    btnUse.style.display = "";
+    btnUse.dataset.mode = mode;
+    btnUse.textContent = (mode === "sleep") ? ("🛏️ " + label) : ("🍖 " + label);
+  }
+
+  if (btnUse){
+    btnUse.addEventListener("pointerdown", (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const mode = btnUse.dataset.mode || "";
+      if (mode === "sleep"){
+        if (typeof toggleBedSleep === "function") toggleBedSleep();
+      } else if (mode === "eat"){
+        if (typeof tryEat === "function") tryEat();
+      }
+    }, {passive:false});
+  }
+
 
   // gợi ý tương tác ngữ cảnh để người chơi đỡ bị "lạc"
   function getInteractionHint(){
@@ -1160,6 +1412,8 @@ if (body.cold > 85){
     let msg = states.join(" • ");
     if (!msg) msg = getInteractionHint();
     stateLabel.textContent = msg;
+
+    updateContextButton();
   }
 
   // ===================== Loop =====================
@@ -1233,7 +1487,8 @@ if (body.cold > 85){
     scenePill.textContent = "Ngoài rừng";
     miniName.textContent = "Mini Map (Rừng)";
 
-    cam.zoom = 1.05;
+    zoomTouched = false;
+    cam.zoom = getDefaultZoom();
     cam.dragX = cam.dragY = cam.dragTargetX = cam.dragTargetY = 0;
     cam.x = player.x; cam.y = player.y;
 

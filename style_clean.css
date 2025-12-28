@@ -139,6 +139,26 @@
     .helpText div{ margin-top:6px; }
     .helpText div:first-child{ margin-top:0; }
 
+    .rowBtns{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:8px;
+    }
+    .mBtn2{
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(8,12,9,.52);
+      backdrop-filter: blur(6px);
+      color: inherit;
+      font-weight: 900;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mBtn2:active{ transform: translateY(1px); }
+
     /* HUD mini mode (giảm che tầm nhìn) */
     body.hud-mini #hud{
       padding: 8px 10px;

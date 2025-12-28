@@ -64,12 +64,12 @@
   }
 
   // ===================== NPC obstacle-avoid movement =====================
-  function stepCircle(map, x, y, r, dx, dy){
+  function stepCircle(map, x, y, r, dx, dy, opt){
     let nx = x + dx, ny = y;
-    let r1 = collideResolveCircle(nx, ny, r, map);
+    let r1 = collideResolveCircle(nx, ny, r, map, opt);
     nx = r1.x; ny = r1.y;
     let nx2 = nx, ny2 = ny + dy;
-    let r2 = collideResolveCircle(nx2, ny2, r, map);
+    let r2 = collideResolveCircle(nx2, ny2, r, map, opt);
     return {x:r2.x, y:r2.y};
   }
 
@@ -86,7 +86,7 @@
       const dir = baseDir + off;
       const dx = Math.cos(dir) * sp * dt;
       const dy = Math.sin(dir) * sp * dt;
-      const p = stepCircle(map, ent.x, ent.y, ent.r, dx, dy);
+      const p = stepCircle(map, ent.x, ent.y, ent.r, dx, dy, (ent.canWade && map===world)?{wade:true}:null);
       const moved = Math.hypot(p.x - ent.x, p.y - ent.y);
       if (moved < 0.35) continue;
 

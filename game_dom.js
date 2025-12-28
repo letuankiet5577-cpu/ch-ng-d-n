@@ -51,7 +51,25 @@
     questText.textContent = text;
     questBox.style.display = "block";
     questBox.setAttribute("aria-hidden","false");
+    layoutQuestBox();
   }
+
+  function layoutQuestBox(){
+    if (!questBox) return;
+    if (questBox.style.display === "none") return;
+    const hud = document.getElementById("hud");
+    if (!hud) return;
+
+    const r = hud.getBoundingClientRect();
+    // đặt nhiệm vụ ngay dưới HUD để không bị che
+    let top = r.bottom + 8;
+    // tránh vượt khỏi màn hình
+    top = Math.min(top, Math.max(8, window.innerHeight - 140));
+    questBox.style.top = `${Math.round(top)}px`;
+    questBox.style.left = `${Math.round(r.left)}px`;
+  }
+
+  window.layoutQuestBox = layoutQuestBox;
 
   function showStoryLine(name, text){
     if (!storyBar || !storyName || !storyText) return;
@@ -117,6 +135,8 @@
     view.width  = Math.floor(w * dpr);
     view.height = Math.floor(h * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
+    // đảm bảo nhiệm vụ luôn nằm dưới HUD
+    if (typeof layoutQuestBox === "function") layoutQuestBox();
   }
   window.addEventListener("resize", resize);
   if (window.visualViewport){

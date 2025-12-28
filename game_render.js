@@ -1274,8 +1274,34 @@ if (nv > 0) {
 
     // tên khi gần
     const dd = Math.hypot(player.x - caveTigerHost.x, player.y - caveTigerHost.y);
-    if (dd < 260){
-      drawNameTag(caveTigerHost.ownerName || "Hổ Chủ Hang", caveTigerHost.x, caveTigerHost.y - 42);
+    if (dd < 520){
+      drawNameTag((caveTigerHost.name || caveTigerHost.ownerName || "Hổ Chủ Hang"), caveTigerHost.x, caveTigerHost.y - 42);
+    }
+
+    // bubble thoại khi đuổi/đe doạ
+    if (caveTigerHost.bubbleT > 0 && caveTigerHost.bubbleText){
+      drawSpeechBubble(caveTigerHost.x, caveTigerHost.y - 60, caveTigerHost.bubbleText);
+    }
+  }
+
+  // vợ / con của hổ chủ hang NPC (mỗi con có thể có hoặc không)
+  if (typeof caveMateNPC !== "undefined" && caveMateNPC){
+    drawTigerStyled(caveMateNPC.x, caveMateNPC.y, caveMateNPC.face||0, caveMateNPC.style||caveMateNPC.palette, 0);
+    const dM = Math.hypot(player.x - caveMateNPC.x, player.y - caveMateNPC.y);
+    if (dM < 520){
+      drawNameTag((caveMateNPC.name || "Hổ Cái"), caveMateNPC.x, caveMateNPC.y - 42);
+    }
+    if (caveMateNPC.bubbleT > 0 && caveMateNPC.bubbleText){
+      drawSpeechBubble(caveMateNPC.x, caveMateNPC.y - 60, caveMateNPC.bubbleText);
+    }
+  }
+  if (typeof caveCubNPCs !== "undefined" && Array.isArray(caveCubNPCs) && caveCubNPCs.length){
+    for (const c of caveCubNPCs){
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.scale(0.72, 0.72);
+      drawTigerStyled(0, 0, c.face||0, c.style|| (caveMateNPC ? caveMateNPC.style : null), 0);
+      ctx.restore();
     }
   }
 

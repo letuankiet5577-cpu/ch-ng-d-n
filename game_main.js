@@ -768,6 +768,10 @@ let activeCaveRef = null; // {mouth:{x,y,style,dir}, territoryId:number, ownerNa
 // trỏ trực tiếp tới 1 con trong mảng rivalTigers
 let caveTigerHost = null;
 
+// vợ / con của hổ chủ hang (chỉ tồn tại trong scene hang NPC)
+let caveMateNPC = null;   // {name,x,y,r,face,style,bubbleText,bubbleT,scared,callDone,worryCD,homeX,homeY}
+let caveCubNPCs = [];     // [{x,y,r,face,style,whineCD}]
+
 function caveRefs(){
   const out = [];
   // cave của người chơi
@@ -822,21 +826,117 @@ function enterCave(ref){
   const seedStr = (seedInput.value || "seed") + `::cave:${ref.territoryId}`;
   generateCave(seedStr, style);
 
+  // helper: đặt NPC trong hang ở vị trí an toàn (tránh bị kẹt tường)
+  function safeCaveSpot(px, py, r){
+    for (let k=0; k<30; k++){
+      const jx = px + (Math.random()-0.5)*96;
+      const jy = py + (Math.random()-0.5)*96;
+      const rr = collideResolveCircle(jx, jy, r, cave);
+      const tx = Math.floor(rr.x / TILE) | 0;
+      const ty = Math.floor(rr.y / TILE) | 0;
+      if (tx<0||ty<0||tx>=cave.w||ty>=cave.h) continue;
+      if (!cave.solid[ty*cave.w + tx]) return {x:rr.x, y:rr.y};
+    }
+    const rr = collideResolveCircle(px, py, r, cave);
+    return {x:rr.x, y:rr.y};
+  }
+
   // reset hổ trong hang
   caveTigerHost = null;
+  caveMateNPC = null;
+  caveCubNPCs = [];
   // nếu đây là hang của hổ NPC (không phải hang của bạn)
   if (ref.ownerName !== "Bạn"){
     const host = rivalTigers.find(t => t.territoryId === ref.territoryId);
     if (host){
       caveTigerHost = host;
+      // patch dữ liệu cũ (save) để luôn có thoại/gia đình
+      const baseSeed = (seedInput.value || "seed");
+      if (!host.voice && typeof makeRivalVoice === "function") host.voice = makeRivalVoice(baseSeed, host.territoryId);
+      if (!host.family && typeof makeRivalFamily === "function") host.family = makeRivalFamily(baseSeed, host.territoryId);
+      if (!host.ownerName) host.ownerName = host.name;
+
+      host.cubAlarmDone = false;
 
       // đặt vị trí hổ chủ hang ở ngay gần cửa hang bên trong
       host.x = (cave.entrance.x + 4)*TILE + TILE/2;
       host.y = (cave.entrance.y)*TILE + TILE/2;
+      // đẩy ra khỏi tường nếu cần
+      { const s = safeCaveSpot(host.x, host.y, host.r||18); host.x = s.x; host.y = s.y; }
       host.vx = 0;
       host.vy = 0;
       host.mode = "defend";
       host.aggroT = Math.max(host.aggroT, 10.0); // rất tức giận trong hang
+
+      // spawn vợ / con (nếu có) trong hang của hổ NPC
+      const fam = host.family || null;
+
+      // điểm "an toàn" (gần ổ rơm) để vợ/con chạy về
+      const safeHomeX = (cave && cave.bed) ? (cave.bed.x + 48) : (player.x + 80);
+      const safeHomeY = (cave && cave.bed) ? (cave.bed.y - 18) : (player.y);
+
+      if (fam && fam.mate){
+        // có vợ
+        caveMateNPC = {
+          name: (fam.mate.name || "Hổ Cái"),
+          x: safeHomeX + (Math.random()-0.5)*28,
+          y: safeHomeY + (Math.random()-0.5)*28,
+          homeX: safeHomeX,
+          homeY: safeHomeY,
+          r: 12,
+          face: Math.random()*Math.PI*2,
+          style: fam.mate.palette,
+          vx: 0,
+          vy: 0,
+          canWade: true,
+          bubbleText: "",
+          bubbleT: 0,
+          scared: false,
+          callDone: false,
+          worryCD: 0
+        };
+        // đảm bảo không bị kẹt
+        { const s = safeCaveSpot(caveMateNPC.x, caveMateNPC.y, caveMateNPC.r||12); caveMateNPC.x = s.x; caveMateNPC.y = s.y; }
+
+        const nCubs = fam.cubCount || 0;
+        for (let i=0; i<nCubs; i++){
+          caveCubNPCs.push({
+            x: caveMateNPC.x + (Math.random()-0.5)*22,
+            y: caveMateNPC.y + (Math.random()-0.5)*22,
+            homeX: safeHomeX,
+            homeY: safeHomeY,
+            r: 9,
+            face: Math.random()*Math.PI*2,
+            style: fam.mate.palette,
+            vx: 0,
+            vy: 0,
+            canWade: true,
+            whineCD: 0
+          });
+          // không kẹt tường
+          { const c = caveCubNPCs[caveCubNPCs.length-1]; const s = safeCaveSpot(c.x, c.y, c.r||9); c.x = s.x; c.y = s.y; }
+        }
+      } else if (fam && (fam.cubCount||0) > 0){
+        // không có vợ nhưng vẫn có con (single dad)
+        const nCubs = fam.cubCount || 0;
+        for (let i=0; i<nCubs; i++){
+          caveCubNPCs.push({
+            x: safeHomeX + (Math.random()-0.5)*34,
+            y: safeHomeY + (Math.random()-0.5)*28,
+            homeX: safeHomeX,
+            homeY: safeHomeY,
+            r: 9,
+            face: Math.random()*Math.PI*2,
+            style: (host && host.palette) ? host.palette : null,
+            vx: 0,
+            vy: 0,
+            canWade: true,
+            whineCD: 0
+          });
+          { const c = caveCubNPCs[caveCubNPCs.length-1]; const s = safeCaveSpot(c.x, c.y, c.r||9); c.x = s.x; c.y = s.y; }
+        }
+      }
+
     }
   }
 
@@ -848,7 +948,19 @@ function enterCave(ref){
   player.bedSleep = false;
 
   cam.dragTargetX = cam.dragTargetY = 0;
-  showToast(ref.ownerName === "Bạn" ? "Vào hang của bạn…" : `Vào hang của ${ref.ownerName}…`, 1.0);
+  if (ref.ownerName === "Bạn"){
+    showToast("Vào hang của bạn…", 1.0);
+  } else {
+    let extra = "";
+    if (caveTigerHost && caveTigerHost.voice && Array.isArray(caveTigerHost.voice.cave) && caveTigerHost.voice.cave.length){
+      const line = caveTigerHost.voice.cave[(Math.random()*caveTigerHost.voice.cave.length)|0];
+      extra = ` • 🐯 ${caveTigerHost.name}: ${line}`;
+      // hiện bubble trên đầu hổ chủ hang
+      caveTigerHost.bubbleText = line;
+      caveTigerHost.bubbleT = 2.6;
+    }
+    showToast(`Vào hang của ${ref.ownerName}…${extra}`, 1.15);
+  }
   scenePill.textContent = ref.ownerName === "Bạn" ? "Trong hang (Bạn)" : `Trong hang (${ref.ownerName})`;
   miniName.textContent = "Mini Map (Hang)";
 }
@@ -888,6 +1000,10 @@ function exitCave(){
     caveTigerHost.y = caveTigerHost.homeY;
     caveTigerHost = null;
   }
+
+  // clear family NPCs
+  caveMateNPC = null;
+  caveCubNPCs = [];
 
   scene = "world";
   sceneCooldown = 0.9;
@@ -1114,6 +1230,14 @@ const dy = ay * sp * dt;
 
     env.time += (env.speed * dtEnv) * 0.25;
     while (env.time >= 24) env.time -= 24;
+
+    // Story hook: giữ trời tối cho nhiệm vụ cốt truyện (ví dụ: "Đêm sói")
+    try{
+      if (window.Story && typeof Story.holdDawn === "function" && Story.holdDawn()){
+        // chặn qua mốc sáng (05:00) cho tới khi nhiệm vụ hoàn thành
+        if (env.time >= 5.0 && env.time < 6.0) env.time = 4.95;
+      }
+    }catch(_){}
 
     env.weatherTimer -= dtEnv;
     if (env.weatherTimer <= 0){
@@ -1437,6 +1561,9 @@ if (body.cold > 85){
     stateLabel.textContent = msg;
 
     updateContextButton();
+
+    // layout quest box dưới HUD để không bị che
+    if (typeof window.layoutQuestBox === "function") window.layoutQuestBox();
   }
 
   // ===================== Loop =====================
@@ -1473,6 +1600,7 @@ if (body.cold > 85){
         renderWorld(now/1000, dt);
       } else {
         // trong hang: cho hổ chủ hang đuổi người chơi
+        if (typeof updateCaveFamily === "function") updateCaveFamily(gdt);
         updateCaveTiger(gdt);
         renderCave(now/1000, dt);
       }

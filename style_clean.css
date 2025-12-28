@@ -2,7 +2,7 @@
       color-scheme: dark;
       --mm-panel: 244px;   /* mini panel width */
       --mm-canvas: 224px;  /* minimap css size */
-      --bar-h: 10px;       /* status bar height */
+      --bar-h: 8px;       /* status bar height */
     }
     html, body{
       height:100%;
@@ -18,28 +18,28 @@
 
     #hud{
       position:fixed;
-      left:calc(12px + env(safe-area-inset-left));
-      top:calc(12px + env(safe-area-inset-top));
-      display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;
-      padding:10px 12px;
+      left:calc(8px + env(safe-area-inset-left));
+      top:calc(8px + env(safe-area-inset-top));
+      display:flex; gap:7px; align-items:flex-start; flex-wrap:wrap;
+      padding:7px 9px;
       border:1px solid rgba(255,255,255,.12);
-      border-radius:14px;
+      border-radius:12px;
       background:rgba(8,12,9,.72);
       backdrop-filter: blur(6px);
       user-select:none;
-      max-width:min(980px, calc(100vw - 24px));
+      max-width:min(860px, calc(100vw - 16px));
       z-index:10;
     }
     #hud input{
-      width:140px; padding:7px 9px;
-      border-radius:12px;
+      width:120px; padding:6px 8px;
+      border-radius:10px;
       border:1px solid rgba(255,255,255,.16);
       background:rgba(0,0,0,.35);
       color:inherit; outline:none;
     }
     #hud button{
-      padding:8px 10px;
-      border-radius:12px;
+      padding:7px 9px;
+      border-radius:10px;
       border:1px solid rgba(255,255,255,.16);
       background:rgba(255,255,255,.08);
       color:inherit; cursor:pointer;
@@ -172,11 +172,11 @@
     body.hud-mini .lblShort{ display:inline; }
     body.hud-mini .barRow .label{ width:44px; }
 .pill{
-      padding:6px 10px;
+      padding:5px 9px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,.14);
       background:rgba(0,0,0,.25);
-      font-weight:700;
+      font-weight:800;
       opacity:.95;
       white-space:nowrap;
     }
@@ -185,8 +185,8 @@
     .bars{
       display:flex;
       flex-direction:column;
-      gap:6px;
-      min-width:260px;
+      gap:5px;
+      min-width:220px;
     }
 
     /* nhỏ hơn nữa khi bật UI nhỏ */
@@ -195,11 +195,11 @@
     .barRow{
       display:flex;
       align-items:center;
-      gap:8px;
+      gap:6px;
     }
     .barRow .label{
-      width:72px;
-      font-weight:800;
+      width:58px;
+      font-weight:900;
       opacity:.92;
     }
     .bar{
@@ -219,7 +219,7 @@
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
     }
     .barText{
-      width:72px;
+      width:64px;
       text-align:right;
       font-weight:800;
       opacity:.9;
@@ -229,8 +229,8 @@
     .skills{
       display:flex;
       flex-direction:column;
-      gap:6px;
-      min-width:230px;
+      gap:5px;
+      min-width:200px;
     }
     .skillRow{
       display:flex;
@@ -239,7 +239,7 @@
       align-items:center;
     }
     .skillPill{
-      padding:6px 10px;
+      padding:5px 9px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,.14);
       background:rgba(0,0,0,.25);

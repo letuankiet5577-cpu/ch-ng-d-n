@@ -37,6 +37,14 @@
       needReturn: false,
       huntDone: false,
 
+
+      // wolf night quest
+      wolfNightDone: false,
+      wolfStage: "", // "", "fight", "return"
+      wolfTotal: 0,
+      wolfHoldDawn: false,
+      wolfIntroAt: 0,
+
       // for flavor lines
       killsSinceHome: 0,
       lastHomeVisitAt: 0,
@@ -355,8 +363,131 @@
       if (toast) toast("Hoàn thành nhiệm vụ mở đầu!", 1.0);
     }});
   }
+  // ===================== Wolf Night Quest =====================
+  function countRaidWolves(){
+    if (typeof animals === "undefined" || !animals) return 0;
+    let c = 0;
+    for (const a of animals){
+      if (a && a.type === AnimalType.WOLF && a.questTag === "wolf_night") c++;
+    }
+    return c;
+  }
+
+  function updateWolfQuestText(){
+    const alive = countRaidWolves();
+    const total = state.wolfTotal || 0;
+    // tránh setQuest quá dày
+    const ts = nowSec();
+    if (ts - (state.__wolfHudAt||0) < 0.45) return;
+    state.__wolfHudAt = ts;
+
+    if (state.wolfStage === "fight"){
+      setQuest(`• ĐÊM SÓI: Tiêu diệt bầy sói\n  Tiến độ: ${Math.max(0, total - alive)}/${total}\n  (Phải diệt hết mới trời sáng)`);
+    } else if (state.wolfStage === "return"){
+      setQuest("• Trời đã sắp sáng...\n  Hãy quay về hang với Tiểu Bạch");
+    }
+  }
+
+  function startWolfNightQuest(){
+    state.questId = "wolf_night";
+    state.wolfStage = "fight";
+    state.wolfHoldDawn = true;
+    state.wolfTotal = 28; // "mấy chục con" nhưng vẫn tránh lag
+    state.wolfIntroAt = nowSec();
+
+    // spawn đàn sói ngoài cửa hang (ở world)
+    try{
+      if (typeof spawnQuestWolfRaid === "function"){
+        spawnQuestWolfRaid(state.wolfTotal);
+      }
+    }catch(_){}
+
+    updateWolfQuestText();
+    if (toast) toast("🐺 Bầy sói đã xâm nhập! Ra ngoài chiến đấu!", 1.2);
+    saveLocal();
+  }
+
+  function wolfNightIntroScene(){
+    play([
+      {name:"Tiểu Bạch", text:"Đêm nay... chàng ngồi đây với thiếp lâu hơn mọi khi."},
+      {name:"Tiểu Bạch", text:"Lạ thật... dạo này chàng không còn tức giận hay la mắng thiếp nữa."},
+      {name:"Dần Ca", text:"...Ta chỉ... không muốn làm nàng sợ."},
+      {name:"Tiểu Bạch", text:"Thiếp biết chàng đã khác rồi. Thiếp... mừng lắm."},
+      {name:"(Bên ngoài)", text:"Awoooo...!!"},
+      {name:"Tiểu Bạch", text:"Tiếng tru...! Chàng ơi, bầy sói! Chúng vào lãnh thổ rồi!"},
+      {name:"Dần Ca", text:"Nàng ở lại trong hang. Ta ra ngoài."},
+      {name:"Tiểu Bạch", text:"Chàng cẩn thận! Thiếp sẽ chờ... xin chàng trở về bình an!"},
+    ], {blocking:true, onDone: ()=>{
+      startWolfNightQuest();
+    }});
+  }
+
+  function completeWolfFight(){
+    // thả trời sáng + yêu cầu quay về hang
+    state.wolfStage = "return";
+    state.wolfHoldDawn = false;
+
+    // đẩy thời gian qua rạng sáng ngay khi dọn sạch bầy sói
+    if (env && typeof env.time === "number"){
+      if (env.time < 5.15) env.time = 5.18;
+    }
+
+    updateWolfQuestText();
+    if (toast) toast("🌅 Yên rồi... bầy sói đã bị tiêu diệt.", 1.25);
+    saveLocal();
+  }
+
+  function finishWolfReturnScene(){
+    play([
+      {name:"Tiểu Bạch", text:"Chàng... chàng về rồi!! Thiếp nghe tiếng tru mà tim muốn ngừng đập..."},
+      {name:"Tiểu Bạch", text:"Chàng có bị thương không? Lại đây... để thiếp xem."},
+      {name:"Dần Ca", text:"Ta ổn. Bầy sói... đã hết rồi. Trời sắp sáng."},
+      {name:"Tiểu Bạch", text:"Thiếp tự hào về chàng... Cảm ơn chàng đã bảo vệ hang của chúng ta."},
+      {name:"Tiểu Bạch", text:"Chàng nghỉ đi. Thiếp sẽ ở đây chăm sóc chàng."},
+    ], {blocking:true, onDone: ()=>{
+      state.wolfNightDone = true;
+      state.questId = "freeplay";
+      state.wolfStage = "";
+      state.wolfTotal = 0;
+      state.wolfHoldDawn = false;
+
+      setQuest("• Sống sót & bảo vệ lãnh thổ\n  (Săn mồi, nghỉ ngơi, đuổi hổ lạ)");
+      if (toast) toast("Hoàn thành nhiệm vụ: Đêm sói", 1.1);
+      saveLocal();
+    }});
+  }
+
+  function shouldTriggerWolfNight(){
+    if (!state.huntDone) return false;              // phải qua quest mở đầu
+    if (state.wolfNightDone) return false;          // chỉ 1 lần
+    if (!isHomeCave()) return false;
+    if (!window.wifeNPC) return false;
+    if (state.questId && state.questId !== "freeplay") return false;
+
+    // chỉ kích hoạt vào ban đêm
+    const t = env ? env.time : 12;
+    const night = (t >= 21.0 || t < 3.5);
+    if (!night) return false;
+
+    // người chơi phải ở gần vợ để "đang trò chuyện"
+    const d = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
+    if (d > 210) return false;
+
+    // tránh kích hoạt quá sớm liên tục
+    const ts = nowSec();
+    if (ts - (state.__wolfTryAt||0) < 6) return false;
+    state.__wolfTryAt = ts;
+    return true;
+  }
+
 
   function wifeRandomLine(){
+    // ưu tiên cutscene nhiệm vụ "Đêm sói"
+    if (state.questId === "wolf_night") return;
+    if (shouldTriggerWolfNight() && (!queue || queue.length===0)){
+      wolfNightIntroScene();
+      return;
+    }
     const t = env ? env.time : 12;
     const late = (t >= 22 || t < 5);
 
@@ -403,6 +534,17 @@
   function onKill(kind, obj){
     // đếm thịt để vợ khen
     state.killsSinceHome = (state.killsSinceHome||0) + 1;
+
+
+    // nhiệm vụ "Đêm sói"
+    if (state.questId === "wolf_night" && state.wolfStage === "fight" && kind === "animal" && obj && obj.type === AnimalType.WOLF && obj.questTag === "wolf_night"){
+      updateWolfQuestText();
+      if (countRaidWolves() <= 0){
+        completeWolfFight();
+      }
+      saveLocal();
+      return;
+    }
 
     // nhiệm vụ săn 3
     if (state.questId === "hunt_3" && !state.huntDone){
@@ -468,7 +610,22 @@
         if (window.wifeNPC.bubbleT <= 0) window.wifeNPC.bubbleText = "";
       }
 
-      // ensure wife exists in home cave
+
+
+      // wolf quest runtime (đếm sói / giữ trời tối)
+      if (state.questId === "wolf_night"){
+        // cập nhật text nhiệm vụ
+        updateWolfQuestText();
+        if (state.wolfStage === "fight"){
+          const alive = countRaidWolves();
+          if (alive <= 0){
+            completeWolfFight();
+          }
+        }
+      }
+
+      // ensure wife exists ONLY in home cave.
+      // Fix bug: Tiểu Bạch bị "kẹt" lại và xuất hiện trong hang hổ khác nếu không xoá.
       if (isHomeCave()){
         ensureWifeNPC();
         if (window.wifeNPC) updateWifeAI(dt);
@@ -483,6 +640,15 @@
           finishHuntQuestScene();
         }
 
+
+        // kết thúc nhiệm vụ "Đêm sói" khi đã dọn sạch và quay về hang
+        if (state.questId === "wolf_night" && state.wolfStage === "return" && (!queue || queue.length===0)){
+          const d2 = Math.hypot(player.x - window.wifeNPC.x, player.y - window.wifeNPC.y);
+          if (d2 < 220){
+            finishWolfReturnScene();
+          }
+        }
+
         // hội thoại ngẫu nhiên khi về hang
         // chỉ nói khi người chơi không ở quá xa
         if (window.wifeNPC){
@@ -491,10 +657,16 @@
             wifeRandomLine();
           }
         }
+      } else {
+        // rời hang của bạn / vào hang NPC khác => xoá Tiểu Bạch khỏi scene
+        if (window.wifeNPC){
+          try{ delete window.wifeNPC; }catch(_){ window.wifeNPC = null; }
+        }
       }
     },
     onKill(kind, obj){ onKill(kind, obj); },
-    onRespawn(){ onRespawnInHome(); },
+        holdDawn(){ return !!state.wolfHoldDawn; },
+onRespawn(){ onRespawnInHome(); },
     reset(){ resetAll(); },
     onNewMap(seedStr){
       // gọi khi người chơi 'Tạo map' (regen). Reset lại toàn bộ tiến trình cốt truyện.

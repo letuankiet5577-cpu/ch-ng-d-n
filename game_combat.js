@@ -3,6 +3,10 @@
     return player.forcedSleepT > 0 || player.bedSleep;
   }
 
+  function isCombatScene(){
+    return scene === "world" || scene === "cave";
+  }
+
   // ===== Target lock & combo (chuột trái) =====
 function isTargetAlive(tgt){
   if (!tgt || !tgt.obj) return false;
@@ -74,7 +78,7 @@ function pickNearestEnemyToPoint(px,py, maxD){
 }
 
 function lockNearestTarget(){
-  if (scene !== "world") return;
+  if (!isCombatScene()) return;
   const cand = pickNearestEnemyToPoint(player.x, player.y, 260);
   if (!cand){
     showToast("Không có mục tiêu gần để khoá", 0.7);
@@ -123,7 +127,7 @@ function advanceClawCombo(){
 
 // chuột trái (tap) => cào chính xác / (đủ combo) => vồ
 function primaryAttackTap(){
-  if (scene !== "world") return;
+  if (!isCombatScene()) return;
   if (locked()) return;
 
   if (player.pounceReady){
@@ -144,7 +148,7 @@ function primaryAttackTap(){
 function updateMouseHoldAttack(nowMs){
   if (!mouse.leftDown) return;
   if (mouse.leftHoldFired) return;
-  if (scene !== "world") return;
+  if (!isCombatScene()) return;
   if (locked()) return;
   if (nowMs - mouse.leftDownAtMs < 220) return;
 
@@ -153,7 +157,7 @@ function updateMouseHoldAttack(nowMs){
 }
 
 function useClaw(opts={}){
-  if (scene !== "world") return false;
+  if (!isCombatScene()) return false;
   if (locked()) return false;
   if (cd.claw > 0) return false;
 
@@ -228,7 +232,7 @@ function useClaw(opts={}){
 }
 
   function useBite(){
-    if (scene !== "world") return;
+    if (!isCombatScene()) return;
     if (locked()) return;
     if (cd.bite > 0) return;
 
@@ -278,7 +282,7 @@ function useClaw(opts={}){
   }
 
   function useRoar(){
-    if (scene !== "world") return;
+    if (!isCombatScene()) return;
     if (locked()) return;
     if (cd.roar > 0) return;
 
@@ -311,7 +315,7 @@ addFxRing(player.x, player.y, 0.55, radius);
   }
 
   function usePounce(fromCombo=false){
-  if (scene !== "world") return;
+  if (!isCombatScene()) return;
   if (locked()) return;
   if (cd.pounce > 0) return;
 

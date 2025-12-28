@@ -19,6 +19,209 @@
     return false;
   }
 
+  
+// ===== helper: wander movement for cave family =====
+function pickWanderPointAround(cx, cy, rad){
+  const a = Math.random()*Math.PI*2;
+  const r = Math.random()*rad;
+  return { x: cx + Math.cos(a)*r, y: cy + Math.sin(a)*r };
+}
+function wanderEnt(map, ent, dt, cx, cy, rad, baseSp){
+  if (typeof ent.wanderT !== "number") ent.wanderT = 0;
+  if (!isFinite(ent.wanderX) || !isFinite(ent.wanderY)) ent.wanderT = 0;
+
+  const near = (Math.hypot((ent.wanderX||cx) - ent.x, (ent.wanderY||cy) - ent.y) < 18);
+  if (ent.wanderT <= 0 || near){
+    const p = pickWanderPointAround(cx, cy, rad);
+    ent.wanderX = p.x; ent.wanderY = p.y;
+    ent.wanderT = 1.6 + Math.random()*2.6;
+  } else {
+    ent.wanderT = Math.max(0, ent.wanderT - dt);
+  }
+
+  const dx = (ent.wanderX||cx) - ent.x;
+  const dy = (ent.wanderY||cy) - ent.y;
+  const d  = Math.hypot(dx,dy) || 0.0001;
+
+  const sp = baseSp;
+  ent.vx = lerp(ent.vx||0, (dx/d)*sp, 0.10);
+  ent.vy = lerp(ent.vy||0, (dy/d)*sp, 0.10);
+
+  moveWithObstacleAvoid(map, ent, dt);
+  if (Math.abs(ent.vx)+Math.abs(ent.vy) > 1e-2) ent.face = Math.atan2(ent.vy, ent.vx);
+}
+
+// vợ / con trong hang của hổ NPC
+  function updateCaveFamily(dt){
+    if (scene !== "cave") return;
+    if (!caveMateNPC && (!Array.isArray(caveCubNPCs) || caveCubNPCs.length===0)) return;
+
+    // update mate bubble
+    if (caveMateNPC && caveMateNPC.bubbleT > 0){
+      caveMateNPC.bubbleT = Math.max(0, caveMateNPC.bubbleT - dt);
+      if (caveMateNPC.bubbleT <= 0) caveMateNPC.bubbleText = "";
+    }
+    if (caveMateNPC && caveMateNPC.worryCD > 0) caveMateNPC.worryCD = Math.max(0, caveMateNPC.worryCD - dt);
+    for (const c of (caveCubNPCs||[])){
+      if (c.whineCD > 0) c.whineCD = Math.max(0, c.whineCD - dt);
+    }
+
+    const mate = caveMateNPC;
+
+    if (mate){
+      const dP = Math.hypot(player.x - mate.x, player.y - mate.y);
+
+      // khi người chơi xâm nhập hang: vợ sợ chạy và kêu cứu
+      if (dP < 260 && !mate.callDone){
+        mate.callDone = true;
+        mate.scared = true;
+
+        const lines = (caveTigerHost && caveTigerHost.voice && Array.isArray(caveTigerHost.voice.mateCall) && caveTigerHost.voice.mateCall.length)
+          ? caveTigerHost.voice.mateCall
+          : ["Có kẻ lạ!", "Cứu em với!"];
+        const line = lines[(Math.random()*lines.length)|0];
+        mate.bubbleText = line;
+        mate.bubbleT = 2.6;
+        showToast(`🐯♀ ${mate.name}: ${line}`, 1.25);
+
+        if (caveTigerHost){
+          caveTigerHost.aggroT = Math.max(caveTigerHost.aggroT, 12.0);
+          caveTigerHost.enrageT = Math.max(caveTigerHost.enrageT, 18.0); // tức giận đánh mạnh hơn
+        }
+      }
+
+      // vợ lo cho chồng khi chồng bị yếu máu
+      if (caveTigerHost && mate.callDone && caveTigerHost.hp < caveTigerHost.hpMax*0.60 && mate.worryCD <= 0){
+        const lines = (caveTigerHost.voice && Array.isArray(caveTigerHost.voice.worry) && caveTigerHost.voice.worry.length)
+          ? caveTigerHost.voice.worry
+          : ["Mình ơi cẩn thận!","Đánh đuổi hắn đi!"];
+        mate.bubbleText = lines[(Math.random()*lines.length)|0];
+        mate.bubbleT = 2.2;
+        mate.worryCD = 8.0;
+      }
+// movement:
+// - bình thường: đi lại quanh ổ (không đứng im)
+// - khi sợ (có kẻ lạ): chạy về ổ và núp gần đó
+const homeX = mate.homeX;
+const homeY = mate.homeY;
+
+if (mate.scared){
+  const mdx = homeX - mate.x;
+  const mdy = homeY - mate.y;
+  const md = Math.hypot(mdx, mdy) || 0.0001;
+
+  if (md > 10){
+    const sp = 190;
+    mate.vx = lerp(mate.vx||0, (mdx/md)*sp, 0.18);
+    mate.vy = lerp(mate.vy||0, (mdy/md)*sp, 0.18);
+    moveWithObstacleAvoid(cave, mate, dt);
+    if (Math.abs(mate.vx)+Math.abs(mate.vy) > 1e-2) mate.face = Math.atan2(mate.vy, mate.vx);
+  } else {
+    // đã về ổ: đi nhẹ quanh ổ (đỡ cảm giác bị kẹt)
+    wanderEnt(cave, mate, dt, homeX, homeY, 46, 62);
+  }
+} else {
+  // đi tự do quanh ổ khi chưa có kẻ lạ
+  wanderEnt(cave, mate, dt, homeX, homeY, 88, 78);
+}
+  // con đi theo mẹ (khi bình thường: quanh mẹ; khi sợ: bám sát và chạy về ổ)
+  for (let i=0; i<(caveCubNPCs||[]).length; i++){
+    const c = caveCubNPCs[i];
+
+    // hành vi:
+    // - khi mẹ sợ: chạy theo mẹ về ổ
+    // - bình thường: con đi quanh mẹ (random) nhưng không đi quá xa ổ
+    if (mate.scared){
+      const ox = (i%2? -12: 12);
+      const oy = (i<2? 10: -10);
+      const tx = mate.x + ox;
+      const ty = mate.y + oy;
+      const dx = tx - c.x;
+      const dy = ty - c.y;
+      const d = Math.hypot(dx,dy) || 0.0001;
+      const sp = 175;
+      c.vx = lerp(c.vx||0, (dx/d)*sp, 0.18);
+      c.vy = lerp(c.vy||0, (dy/d)*sp, 0.18);
+      moveWithObstacleAvoid(cave, c, dt);
+      if (Math.abs(c.vx)+Math.abs(c.vy) > 1e-2) c.face = Math.atan2(c.vy, c.vx);
+    } else {
+      // đi quanh mẹ
+      wanderEnt(cave, c, dt, mate.x, mate.y, 58, 92);
+
+      // không cho đi quá xa ổ
+      const dd = Math.hypot(c.x - mate.homeX, c.y - mate.homeY);
+      if (dd > 170){
+        const dx = mate.homeX - c.x;
+        const dy = mate.homeY - c.y;
+        const d = Math.hypot(dx,dy) || 0.0001;
+        c.vx = lerp(c.vx||0, (dx/d)*110, 0.12);
+        c.vy = lerp(c.vy||0, (dy/d)*110, 0.12);
+        moveWithObstacleAvoid(cave, c, dt);
+      }
+    }
+
+    const dp = Math.hypot(player.x - c.x, player.y - c.y);
+    if (dp < 220 && c.whineCD <= 0){
+      c.whineCD = 8.0;
+      if (Math.random() < 0.22){
+        showToast("🐯 con: ư... ư...", 0.9);
+      }
+    }
+  }
+} else {
+
+      // Không có vợ nhưng có con (single dad): con sợ chạy về ổ và hổ đực tức giận hơn
+      const host = caveTigerHost;
+
+      if (host && typeof host.cubAlarmDone !== "boolean") host.cubAlarmDone = false;
+
+      let anyNear = false;
+
+      for (let i=0; i<(caveCubNPCs||[]).length; i++){
+        const c = caveCubNPCs[i];
+
+        const homeX = (typeof c.homeX === "number") ? c.homeX : ((cave && cave.bed) ? (cave.bed.x + 48) : c.x);
+        const homeY = (typeof c.homeY === "number") ? c.homeY : ((cave && cave.bed) ? (cave.bed.y - 18) : c.y);
+
+        const dp = Math.hypot(player.x - c.x, player.y - c.y);
+        if (dp < 240) anyNear = true;
+
+        // con kêu nhỏ khi có người lạ
+        if (dp < 220 && c.whineCD <= 0){
+          c.whineCD = 8.0;
+          if (Math.random() < 0.35){
+            showToast("🐯 con: ư... ư...", 0.9);
+          }
+        }
+// di chuyển:
+// - khi có người lạ: chạy về ổ
+// - bình thường: đi quanh ổ (đỡ cảm giác "kẹt")
+if (dp < 240){
+  const dx = homeX - c.x;
+  const dy = homeY - c.y;
+  const d = Math.hypot(dx,dy) || 0.0001;
+  const sp = 175;
+  c.vx = lerp(c.vx||0, (dx/d)*sp, 0.18);
+  c.vy = lerp(c.vy||0, (dy/d)*sp, 0.18);
+  moveWithObstacleAvoid(cave, c, dt);
+  if (Math.abs(c.vx)+Math.abs(c.vy) > 1e-2) c.face = Math.atan2(c.vy, c.vx);
+} else {
+  wanderEnt(cave, c, dt, homeX, homeY, 78, 88);
+}
+      }
+
+      if (host && anyNear && !host.cubAlarmDone){
+        host.cubAlarmDone = true;
+        host.aggroT = Math.max(host.aggroT, 12.0);
+        host.enrageT = Math.max(host.enrageT, 18.0);
+
+        // thoại hổ đực khi có kẻ lạ tới gần con
+        const line = "Tránh xa con ta!";
+        showToast(`🐯 ${host.name}: ${line}`, 1.15);
+      }
+    }
+  }
+
   function tigerEat(t, c){
     if (!c || c.meat <= 0) return false;
     c.meat -= 1;
@@ -122,6 +325,12 @@
     const farSkip = 1300;
 
     for (const t of rivalTigers){
+      // đảm bảo field mới luôn tồn tại (khi load save cũ)
+      if (typeof t.speakCD !== "number") t.speakCD = 0;
+      if (typeof t.enrageT !== "number") t.enrageT = 0;
+      if (typeof t.bubbleT !== "number") t.bubbleT = 0;
+      if (typeof t.bubbleText !== "string") t.bubbleText = "";
+
       // timers
       if (t.deadT > 0){
         t.deadT = Math.max(0, t.deadT - dt);
@@ -132,6 +341,9 @@
       if (t.roarCD > 0) t.roarCD = Math.max(0, t.roarCD - dt);
       if (t.attackCD > 0) t.attackCD = Math.max(0, t.attackCD - dt);
       if (t.aggroT > 0) t.aggroT = Math.max(0, t.aggroT - dt);
+      if (t.speakCD > 0) t.speakCD = Math.max(0, t.speakCD - dt);
+      if (t.bubbleT > 0){ t.bubbleT = Math.max(0, t.bubbleT - dt); if (t.bubbleT<=0) t.bubbleText = ""; }
+      if (t.enrageT > 0) t.enrageT = Math.max(0, t.enrageT - dt);
       if (t.stunnedT > 0) t.stunnedT = Math.max(0, t.stunnedT - dt);
       if (t.hitFlashT > 0) t.hitFlashT = Math.max(0, t.hitFlashT - dt);
       if (t.thinkT > 0) t.thinkT = Math.max(0, t.thinkT - dt);
@@ -146,6 +358,23 @@
       // nếu người chơi xâm nhập => DEFEND override
       const playerInside = inTerritoryPx(player.x, player.y, terr);
       const dToPlayer = Math.hypot(player.x - t.x, player.y - t.y);
+
+      // nói chuyện đuổi đánh (mỗi NPC có câu khác nhau)
+      if (playerInside && dToPlayer < 360 && t.speakCD <= 0){
+        const lines = (t.voice && Array.isArray(t.voice.territory) && t.voice.territory.length)
+          ? t.voice.territory
+          : ["Cút khỏi đây!","Lãnh thổ của ta!","Đừng tới gần!"];
+        const line = lines[(Math.random()*lines.length)|0];
+        t.bubbleText = line;
+        t.bubbleT = 2.6;
+        showToast(`🐯 ${t.name}: ${line}`, 1.15);
+        t.speakCD = 6.5 + Math.random()*4.0;
+
+        // nếu nó có vợ/con, nó sẽ dễ "tức" hơn khi bị xâm nhập
+        if (t.family && t.family.hasMate){
+          t.enrageT = Math.max(t.enrageT, 6.0);
+        }
+      }
 
       let desired = scheduleTigerMode(env.time);
 if (playerInside) desired = "defend";
@@ -280,7 +509,8 @@ if (t.hp < t.hpMax*0.25 && desired !== "defend") desired = "rest";
         const d = Math.hypot(dx,dy);
 
         // giữ trong lãnh thổ: nếu player đứng sát rìa, vẫn không đuổi "ra ngoài" quá nhiều
-        const sp = 175;
+        let sp = 175;
+        if (t.enrageT > 0) sp *= 1.15; // tức giận => chạy nhanh hơn
         const nx = dx/(d||1), ny = dy/(d||1);
         t.vx = lerp(t.vx, nx*sp, 0.12);
         t.vy = lerp(t.vy, ny*sp, 0.12);
@@ -299,6 +529,11 @@ if (t.hp < t.hpMax*0.25 && desired !== "defend") desired = "rest";
     dmg = 10;
     label = "Vồ!";
   }
+  // tức giận => đánh mạnh hơn
+  const mul = (t.enrageT > 0) ? 1.35 : 1.0;
+  dmg = Math.max(1, Math.round(dmg * mul));
+  if (mul > 1) label = label.replace(/!+$/, "!!");
+
   const adir = Math.atan2(player.y - t.y, player.x - t.x);
   addFxSlash(t.x + Math.cos(adir)*22, t.y + Math.sin(adir)*22, adir, 0.24);
   addFxSlash(t.x + Math.cos(adir)*18, t.y + Math.sin(adir)*18, adir + (Math.random()-0.5)*0.28, 0.18);
@@ -336,12 +571,34 @@ if (Math.abs(t.vx)+Math.abs(t.vy) > 1e-2){
     const t = caveTigerHost;
     if (t.deadT > 0) return;
 
+    if (typeof t.speakCD !== "number") t.speakCD = 0;
+    if (typeof t.bubbleT !== "number") t.bubbleT = 0;
+    if (typeof t.bubbleText !== "string") t.bubbleText = "";
+    if (t.speakCD > 0) t.speakCD = Math.max(0, t.speakCD - dt);
+    if (t.bubbleT > 0){ t.bubbleT = Math.max(0, t.bubbleT - dt); if (t.bubbleT<=0) t.bubbleText = ""; }
+
+    if (typeof t.enrageT === "number" && t.enrageT > 0) t.enrageT = Math.max(0, t.enrageT - dt);
+
     // đuổi theo người chơi trong hang
     const dx = player.x - t.x;
     const dy = player.y - t.y;
     const d  = Math.hypot(dx,dy) || 0.0001;
 
-    const sp = 170;
+
+// thoại đuổi người chơi trong hang (hiện bubble + toast)
+if (d < 360 && t.speakCD <= 0){
+  const lines = (t.voice && Array.isArray(t.voice.cave) && t.voice.cave.length)
+    ? t.voice.cave
+    : ["Ra khỏi đây!","Vào hang là chết!"];
+  const line = lines[(Math.random()*lines.length)|0];
+  t.bubbleText = line;
+  t.bubbleT = 2.6;
+  showToast(`🐯 ${t.name}: ${line}`, 1.05);
+  t.speakCD = 7.0 + Math.random()*4.0;
+}
+
+    let sp = 170;
+    if (t.enrageT > 0) sp *= 1.15;
     const nx = dx/d, ny = dy/d;
     t.vx = lerp(t.vx, nx*sp, 0.20);
     t.vy = lerp(t.vy, ny*sp, 0.20);
@@ -361,6 +618,11 @@ if (Math.abs(t.vx)+Math.abs(t.vy) > 1e-2){
         dmg = 10;
         label = "Vồ!";
       }
+      // tức giận => đánh mạnh hơn
+      const mul = (t.enrageT > 0) ? 1.35 : 1.0;
+      dmg = Math.max(1, Math.round(dmg * mul));
+      if (mul > 1) label = label.replace(/!+$/, "!!");
+
       const adir = Math.atan2(player.y - t.y, player.x - t.x);
       addFxSlash(t.x + Math.cos(adir)*22, t.y + Math.sin(adir)*22, adir, 0.24);
       addFxSlash(t.x + Math.cos(adir)*18, t.y + Math.sin(adir)*18, adir + (Math.random()-0.5)*0.28, 0.18);
@@ -490,6 +752,10 @@ if (Math.abs(t.vx)+Math.abs(t.vy) > 1e-2){
         ctx.fillText(t.name, t.x, t.y-39);
         ctx.restore();
       }
+      if (t.bubbleT > 0 && t.bubbleText && typeof drawSpeechBubble === "function"){
+        drawSpeechBubble(t.x, t.y - 60, t.bubbleText);
+      }
+
     }
   }
 
@@ -658,6 +924,54 @@ function spawnWolfPackNearPlayer(){
     const jy = (Math.random()-0.5)*120;
     spawnWolfAt(center.x + jx, center.y + jy, pid, i===0);
   }
+}
+
+
+// Spawn đàn sói "raid" cho nhiệm vụ cốt truyện (ngoài cửa hang của bạn)
+function spawnQuestWolfRaid(total=28){
+  try{
+    if (!world || !world.caveMouth || typeof animals === "undefined") return;
+    // xoá sói quest cũ (nếu có)
+    for (let i = animals.length-1; i >= 0; i--){
+      const a = animals[i];
+      if (a && a.type === AnimalType.WOLF && a.questTag === "wolf_night"){
+        animals.splice(i,1);
+      }
+    }
+
+    const px = world.caveMouth.x*TILE + TILE/2;
+    const py = world.caveMouth.y*TILE + TILE/2;
+
+    const packs = Math.max(3, Math.min(5, Math.round(total/7)));
+    const baseN = Math.floor(total / packs);
+    let extra = total - baseN * packs;
+
+    for (let p=0; p<packs; p++){
+      const packN = baseN + (extra>0 ? 1 : 0);
+      if (extra>0) extra--;
+
+      const center = findGrassNear(px, py, 360 + p*35, 820 + p*55, 140);
+      if (!center) continue;
+
+      const pid = (wolfPackSeq++ + 5000);
+      for (let i=0; i<packN; i++){
+        const ang = Math.random()*Math.PI*2;
+        const rr  = 18 + Math.random()*85;
+        const x = clamp(center.x + Math.cos(ang)*rr, 8, world.w*TILE-8);
+        const y = clamp(center.y + Math.sin(ang)*rr, 8, world.h*TILE-8);
+
+        const a = spawnWolfAt(x, y, pid, i===0);
+        a.questTag = "wolf_night";
+        a.aggroT = Math.max(a.aggroT, 8.0);
+        // nhẹ hơn chút để người chơi có cửa
+        a.hp = Math.round(a.hp * 0.92);
+        a.hpMax = a.hp;
+      }
+    }
+
+    // cập nhật label nếu có
+    try{ animalCountLabel.textContent = String(animals.length); }catch(_){}
+  }catch(_){}
 }
 
 function updateNightWolfSpawns(dt){

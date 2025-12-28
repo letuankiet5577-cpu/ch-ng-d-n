@@ -36,6 +36,96 @@
     {tag:"Hổ Đực Sẫm",      main:"#cc6f22", dark:"#8a3f14"},
   ];
 
+  // Bảng màu + tên cho "vợ" (hổ cái) của các hổ đực NPC. (Giữ cùng phong cách đồ hoạ.)
+  const FEMALE_NAMES = [
+    "Hạ My","Linh Nhi","Ngọc Anh","Bạch Liên","Tuyết Nhi","Mai Hoa","Thanh Vân","Yến Nhi",
+    "Lan Chi","Hồng Nguyệt","Mộc Miên","Hạ Vy","Thảo Nhi","An Nhi","Diệp Lam","Khả Nhi"
+  ];
+  const FEMALE_PALETTES = [
+    {tag:"Hổ Cái Vàng Nhạt", main:"#f6c27a", dark:"#d99339"},
+    {tag:"Hổ Cái Nâu Nhạt",  main:"#e5a46b", dark:"#be6d2a"},
+    {tag:"Hổ Cái Cam Nhạt",  main:"#f1a86a", dark:"#c56f2b"},
+    {tag:"Hổ Cái Sẫm",       main:"#c97a3a", dark:"#8f4518"},
+    {tag:"Hổ Cái Xám Vàng",  main:"#d9c2a4", dark:"#b58a5f"},
+  ];
+
+  function makeRivalFamily(seedStr, territoryId){
+    // dùng RNG riêng để không làm thay đổi map/animals khi thêm feature gia đình.
+    const seedFn = xmur3(`${seedStr}::family:${territoryId}`);
+    const r = mulberry32(seedFn());
+
+    // có vợ / không có vợ (mỗi con khác nhau)
+    const hasMate = r() < 0.62;
+    let mate = null;
+
+    // có con: có thể có vợ hoặc không (single dad) — theo yêu cầu "có con có vợ / có con không có vợ"
+    let cubCount = 0;
+
+    if (hasMate){
+      const name = FEMALE_NAMES[(r()*FEMALE_NAMES.length)|0];
+      const pal  = FEMALE_PALETTES[(r()*FEMALE_PALETTES.length)|0];
+      mate = { name, palette: pal };
+
+      if (r() < 0.55){
+        cubCount = 1 + ((r()*3)|0); // 1..3
+      }
+    } else {
+      // một số hổ đực vẫn có con nhưng không có vợ trong hang (vợ mất/đi săn/đã rời đi...)
+      if (r() < 0.18){
+        cubCount = 1 + ((r()*2)|0); // 1..2
+      }
+    }
+
+    return { hasMate, mate, cubCount };
+  }
+
+  function makeRivalVoice(seedStr, territoryId){
+    const seedFn = xmur3(`${seedStr}::voice:${territoryId}`);
+    const r = mulberry32(seedFn());
+
+    const territory = [
+      "Cút khỏi lãnh thổ của ta!",
+      "Dám đặt chân vào đây à?",
+      "Biến ngay trước khi ta xé xác!",
+      "Đây là đất của ta, mau lui!",
+      "Ngửi thấy mùi kẻ lạ... đừng hòng thoát!",
+      "Đừng thử thách ta!",
+    ];
+    const cave = [
+      "Dám xâm nhập hang ta?!",
+      "Vào hang là chết!",
+      "Ngươi tìm đường chết à?",
+      "Ra khỏi đây ngay!",
+    ];
+    const mateCall = [
+      "Có kẻ lạ! Mình ơi!",
+      "Cứu em với!",
+      "Anh ơi, trong hang có kẻ đột nhập!",
+    ];
+    const worry = [
+      "Mình ơi cẩn thận!",
+      "Đừng để bị thương!",
+      "Đánh đuổi hắn đi!",
+    ];
+
+    // xáo nhẹ để mỗi con khác nhau
+    const pickN = (arr, n)=>{
+      const a = arr.slice();
+      for (let i=a.length-1; i>0; i--){
+        const j = (r()*(i+1))|0;
+        const tmp=a[i]; a[i]=a[j]; a[j]=tmp;
+      }
+      return a.slice(0, n);
+    };
+
+    return {
+      territory: pickN(territory, 4 + ((r()*2)|0)),
+      cave: pickN(cave, 3),
+      mateCall: pickN(mateCall, 2 + ((r()*2)|0)),
+      worry: pickN(worry, 2 + ((r()*2)|0))
+    };
+  }
+
   function scheduleTigerMode(time24){
     // 20:00-05:00 nghỉ; sáng tuần tra; trưa săn; chiều tuần tra
     if (time24 >= 20 || time24 < 5) return "rest";
@@ -66,6 +156,20 @@
         } else {
           const owner = terr.ownerName ? ` (${terr.ownerName})` : "";
           showToast(`⚠️ Xâm nhập ${terr.name}${owner}`, 1.15);
+
+          // báo động hổ chủ lãnh thổ (nói + bắt đầu đuổi)
+          const tiger = rivalTigers.find(t=>t.territoryId === tid);
+          if (tiger){
+            const lines = (tiger.voice && Array.isArray(tiger.voice.territory) && tiger.voice.territory.length)
+              ? tiger.voice.territory
+              : ["Cút khỏi lãnh thổ của ta!","Biến ngay!"];
+            const line = lines[(Math.random()*lines.length)|0];
+            tiger.bubbleText = line;
+            tiger.bubbleT = 2.6;
+            tiger.speakCD = 7.0 + Math.random()*4.0;
+            tiger.aggroT = Math.max((tiger.aggroT||0), 6.5);
+          }
+
         }
       }
     }
@@ -471,6 +575,9 @@ const homeY = safeHome.ty*TILE + TILE/2;
         territoryId: terr.id,
         name: pal.tag,
         palette: pal,
+        // gia đình + thoại (dùng seed riêng => ổn định theo map)
+        family: makeRivalFamily(seedStr, terr.id),
+        voice: makeRivalVoice(seedStr, terr.id),
         x: homeX + (baseRand()-0.5)*12,
         y: homeY + (baseRand()-0.5)*12,
         homeX, homeY,
@@ -489,6 +596,8 @@ const homeY = safeHome.ty*TILE + TILE/2;
         roarCD: 1.2 + baseRand()*1.4,
         attackCD: 0,
         aggroT: 0,
+        speakCD: 0,
+        enrageT: 0,
         stunnedT: 0,
         hitFlashT: 0,
         deadT: 0

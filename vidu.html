@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giỏ Hàng</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #FAF7F2;
+    --dark: #1A1612;
+    --brown: #6B3F2A;
+    --gold: #C89B4E;
+    --gold-light: #E8C87A;
+    --rust: #C05A2E;
+    --warm-gray: #8C8078;
+    --border: #E2D8CC;
+    --card-bg: #FFFFFF;
+    --shadow: 0 4px 40px rgba(26,22,18,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--cream);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--dark);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Decorative background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px; right: -200px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(200,155,78,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -150px; left: -150px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(192,90,46,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page-wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 60px 24px 80px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 48px;
+    padding-bottom: 28px;
+    border-bottom: 1.5px solid var(--border);
+    animation: fadeDown 0.6s ease both;
+  }
+
+  .header-left h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(36px, 6vw, 56px);
+    font-weight: 900;
+    letter-spacing: -1px;
+    line-height: 1;
+    color: var(--dark);
+  }
+
+  .header-left h1 span {
+    color: var(--gold);
+  }
+
+  .header-left p {
+    margin-top: 6px;
+    font-size: 14px;
+    color: var(--warm-gray);
+    font-weight: 300;
+    letter-spacing: 0.5px;
+  }
+
+  .cart-icon-wrap {
+    position: relative;
+    width: 52px; height: 52px;
+    background: var(--dark);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .cart-icon-wrap svg {
+    width: 22px; height: 22px;
+    fill: none; stroke: var(--gold); stroke-width: 1.8;
+  }
+
+  .cart-badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    background: var(--rust);
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--cream);
+  }
+
+  /* Items list */
+  .items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    animation: fadeUp 0.7s ease 0.1s both;
+  }
+
+  .item-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto;
+    gap: 16px;
+    align-items: center;
+    box-shadow: var(--shadow);
+    border: 1px solid transparent;
+    transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .item-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: linear-gradient(to bottom, var(--gold), var(--rust));
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+
+  .item-card:hover {
+    border-color: var(--border);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 50px rgba(26,22,18,0.12);
+  }
+
+  .item-card:hover::before {
+    opacity: 1;
+  }
+
+  .item-name {
+    font-weight: 500;
+    font-size: 15px;
+    color: var(--dark);
+  }
+
+  .item-label {
+    font-size: 11px;
+    color: var(--warm-gray);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 400;
+    margin-bottom: 3px;
+  }
+
+  .item-price {
+    font-size: 14px;
+    color: var(--brown);
+    font-weight: 500;
+    text-align: right;
+  }
+
+  .qty-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--cream);
+    border-radius: 50px;
+    padding: 6px 12px;
+  }
+
+  .qty-btn {
+    width: 26px; height: 26px;
+    border: none;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 300;
+    color: var(--dark);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: background 0.2s, color 0.2s;
+    line-height: 1;
+  }
+
+  .qty-btn:hover {
+    background: var(--dark);
+    color: white;
+  }
+
+  .qty-num {
+    font-size: 15px;
+    font-weight: 500;
+    min-width: 18px;
+    text-align: center;
+  }
+
+  .item-total {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--dark);
+    text-align: right;
+    min-width: 90px;
+  }
+
+  .item-total strong {
+    display: block;
+    font-size: 16px;
+    color: var(--brown);
+    font-weight: 600;
+  }
+
+  .delete-btn {
+    width: 34px; height: 34px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--warm-gray);
+    transition: background 0.2s, color 0.2s;
+    flex-shrink: 0;
+  }
+
+  .delete-btn:hover {
+    background: #FFF0EC;
+    color: var(--rust);
+  }
+
+  .delete-btn svg {
+    width: 16px; height: 16px;
+    fill: none; stroke: currentColor; stroke-width: 2;
+  }
+
+  /* Summary card */
+  .summary-card {
+    background: var(--dark);
+    border-radius: 20px;
+    padding: 28px 32px;
+    margin-top: 28px;
+    animation: fadeUp 0.7s ease 0.25s both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .summary-card::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(200,155,78,0.15) 0%, transparent 70%);
+  }
+
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    position: relative;
+  }
+
+  .summary-row:last-of-type {
+    border-bottom: none;
+    padding-top: 16px;
+    margin-top: 4px;
+  }
+
+  .summary-label {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.5px;
+  }
+
+  .summary-value {
+    font-size: 14px;
+    color: rgba(255,255,255,0.8);
+    font-weight: 400;
+  }
+
+  .summary-total-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: white;
+    font-weight: 700;
+  }
+
+  .summary-total-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    color: var(--gold-light);
+    font-weight: 700;
+  }
+
+  /* Buttons */
+  .btn-group {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+
+  .btn-order {
+    flex: 1;
+    min-width: 180px;
+    background: linear-gradient(135deg, var(--gold), var(--rust));
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    border-radius: 50px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    box-shadow: 0 4px 20px rgba(192,90,46,0.35);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-order::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .btn-order:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(192,90,46,0.45);
+    opacity: 0.92;
+  }
+
+  .btn-order:active {
+    transform: scale(0.98);
+  }
+
+  .btn-clear {
+    background: transparent;
+    color: rgba(255,255,255,0.5);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 16px 24px;
+    border-radius: 50px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+
+  .btn-clear:hover {
+    background: rgba(255,255,255,0.07);
+    color: rgba(255,255,255,0.8);
+    border-color: rgba(255,255,255,0.3);
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .empty-icon {
+    width: 90px; height: 90px;
+    margin: 0 auto 24px;
+    background: white;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow);
+  }
+
+  .empty-icon svg {
+    width: 40px; height: 40px;
+    fill: none; stroke: var(--border); stroke-width: 1.5;
+  }
+
+  .empty-state h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    color: var(--dark);
+    margin-bottom: 10px;
+  }
+
+  .empty-state p {
+    color: var(--warm-gray);
+    font-size: 15px;
+    font-weight: 300;
+  }
+
+  /* Success overlay */
+  .success-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26,22,18,0.7);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .success-overlay.show {
+    display: flex;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .success-box {
+    background: white;
+    border-radius: 24px;
+    padding: 48px 40px;
+    text-align: center;
+    max-width: 380px;
+    width: 90%;
+    animation: popUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+  }
+
+  .success-check {
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, var(--gold), var(--rust));
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+  }
+
+  .success-check svg {
+    width: 32px; height: 32px;
+    fill: none; stroke: white; stroke-width: 2.5;
+  }
+
+  .success-box h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    color: var(--dark);
+    margin-bottom: 8px;
+  }
+
+  .success-box p {
+    color: var(--warm-gray);
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.6;
+  }
+
+  /* Animations */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes popUp {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .item-card.removing {
+    animation: slideOut 0.35s ease forwards;
+  }
+
+  @keyframes slideOut {
+    to { opacity: 0; transform: translateX(40px) scale(0.95); max-height: 0; padding: 0; margin: 0; }
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .item-card {
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      gap: 12px;
+    }
+    .item-price { display: none; }
+    .item-total { grid-column: 2; grid-row: 2; }
+    .qty-control { grid-column: 1; grid-row: 2; }
+    .delete-btn { grid-column: 2; grid-row: 1; }
+    .page-wrapper { padding: 36px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-wrapper">
+  <div class="header">
+    <div class="header-left">
+      <h1>Giỏ <span>Hàng</span></h1>
+      <p id="item-count-text">Đang tải...</p>
+    </div>
+    <div class="cart-icon-wrap">
+      <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <div class="cart-badge" id="cart-badge">0</div>
+    </div>
+  </div>
+
+  <div id="main-content"></div>
+</div>
+
+<!-- Success overlay -->
+<div class="success-overlay" id="success-overlay">
+  <div class="success-box">
+    <div class="success-check">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h2>Đặt hàng thành công!</h2>
+    <p>Cảm ơn bạn đã mua sắm.<br>Đơn hàng của bạn đang được xử lý.</p>
+  </div>
+</div>
+
+<script>
+var gio = JSON.parse(localStorage.getItem('gio') || '[]');
+
+// Demo data nếu giỏ trống (để xem giao diện đẹp)
+if(gio.length === 0) {
+  gio = [
+    { ten: 'Áo thun basic trắng', gia: 150000, sl: 2 },
+    { ten: 'Quần jean slim fit', gia: 380000, sl: 1 },
+    { ten: 'Giày sneaker trắng', gia: 620000, sl: 1 },
+  ];
+}
+
+function fmt(n) {
+  return n.toLocaleString('vi-VN') + 'đ';
+}
+
+function save() {
+  localStorage.setItem('gio', JSON.stringify(gio));
+}
+
+function render() {
+  var main = document.getElementById('main-content');
+  var badge = document.getElementById('cart-badge');
+  var countText = document.getElementById('item-count-text');
+  var total = gio.reduce(function(s, x) { return s + x.gia * x.sl; }, 0);
+  var totalQty = gio.reduce(function(s, x) { return s + x.sl; }, 0);
+
+  badge.textContent = totalQty;
+  countText.textContent = gio.length > 0 ? gio.length + ' sản phẩm trong giỏ' : 'Giỏ hàng trống';
+
+  if(gio.length === 0) {
+    main.innerHTML = '<div class="empty-state">'
+      + '<div class="empty-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 001.99 1.61h9.72a2 2 0 001.99-1.81l1.54-9.59H6"/></svg></div>'
+      + '<h3>Giỏ hàng trống</h3>'
+      + '<p>Hãy thêm sản phẩm yêu thích vào giỏ nhé!</p>'
+      + '</div>';
+    return;
+  }
+
+  var subtotal = total;
+  var shipping = subtotal >= 500000 ? 0 : 30000;
+  var grandTotal = subtotal + shipping;
+
+  var html = '<div class="items-list">';
+
+  for(var i = 0; i < gio.length; i++) {
+    var item = gio[i];
+    var lineTotal = item.gia * item.sl;
+    html += '<div class="item-card" id="item-' + i + '">'
+      + '<div><div class="item-label">Sản phẩm</div><div class="item-name">' + item.ten + '</div></div>'
+      + '<div><div class="item-label">Đơn giá</div><div class="item-price">' + fmt(item.gia) + '</div></div>'
+      + '<div class="qty-control">'
+      + '<button class="qty-btn" onclick="changeQty(' + i + ', -1)">−</button>'
+      + '<span class="qty-num">' + item.sl + '</span>'
+      + '<button class="qty-btn" onclick="changeQty(' + i + ', 1)">+</button>'
+      + '</div>'
+      + '<div><div class="item-label">Thành tiền</div><div class="item-total"><strong>' + fmt(lineTotal) + '</strong></div></div>'
+      + '<button class="delete-btn" onclick="xoa(' + i + ')" title="Xóa">'
+      + '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>'
+      + '</button>'
+      + '</div>';
+  }
+
+  html += '</div>';
+
+  html += '<div class="summary-card">'
+    + '<div class="summary-row"><span class="summary-label">Tạm tính</span><span class="summary-value">' + fmt(subtotal) + '</span></div>'
+    + '<div class="summary-row"><span class="summary-label">Phí vận chuyển</span><span class="summary-value">' + (shipping === 0 ? '<span style="color:#C89B4E">Miễn phí</span>' : fmt(shipping)) + '</span></div>'
+    + '<div class="summary-row"><span class="summary-total-label">Tổng cộng</span><span class="summary-total-value">' + fmt(grandTotal) + '</span></div>'
+    + '<div class="btn-group">'
+    + '<button class="btn-order" onclick="dat()">✦ Đặt hàng ngay</button>'
+    + '<button class="btn-clear" onclick="xoaTat()">Xóa tất cả</button>'
+    + '</div>'
+    + (shipping > 0 ? '<p style="color:rgba(255,255,255,0.35);font-size:12px;margin-top:14px;text-align:center">Mua thêm ' + fmt(500000 - subtotal) + ' để được miễn phí vận chuyển</p>' : '')
+    + '</div>';
+
+  main.innerHTML = html;
+}
+
+function changeQty(i, delta) {
+  gio[i].sl += delta;
+  if(gio[i].sl < 1) gio[i].sl = 1;
+  save();
+  render();
+}
+
+function xoa(i) {
+  var card = document.getElementById('item-' + i);
+  if(card) {
+    card.classList.add('removing');
+    setTimeout(function() {
+      gio.splice(i, 1);
+      save();
+      render();
+    }, 340);
+  }
+}
+
+function xoaTat() {
+  if(confirm('Bạn có chắc muốn xóa toàn bộ giỏ hàng?')) {
+    gio = [];
+    save();
+    render();
+  }
+}
+
+function dat() {
+  var overlay = document.getElementById('success-overlay');
+  overlay.classList.add('show');
+  setTimeout(function() {
+    gio = [];
+    save();
+    overlay.classList.remove('show');
+    render();
+  }, 2800);
+}
+
+render();
+</script>
+</body>
+</html>

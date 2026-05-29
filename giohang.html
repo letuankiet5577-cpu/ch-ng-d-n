@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giỏ hàng</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f4f8;
+    color: #2d3748;
+    padding: 30px 16px;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+
+  th {
+    background: #4a90d9;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 14px;
+    text-align: left;
+  }
+
+  td {
+    padding: 12px 14px;
+    font-size: 14px;
+    border-bottom: 1px solid #edf2f7;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f7fafc; }
+
+  .tong-row td {
+    font-weight: 700;
+    font-size: 15px;
+    color: #2b6cb0;
+    background: #ebf4ff;
+  }
+
+  .tong-row:hover td { background: #ebf4ff; }
+
+  button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    color: #e53e3e;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+  button:hover { background: #fff5f5; }
+
+  .btn-order {
+    margin-top: 14px;
+    width: 100%;
+    background: #4a90d9;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-order:hover { background: #357abd; }
+
+  .empty { text-align: center; color: #a0aec0; padding: 50px 0; font-size: 15px; }
+</style>
+</head>
+<body>
+<h2>🛒 Giỏ hàng</h2>
+<div id="gio"></div>
+
+<script>
+var gio = JSON.parse(localStorage.getItem('gio') || '[]');
+
+if (!gio.length) {
+  gio = [ ];
+}
+
+function fmt(n) { return n.toLocaleString('vi-VN') + 'đ'; }
+function save() { localStorage.setItem('gio', JSON.stringify(gio)); }
+
+function render() {
+  var el = document.getElementById('gio');
+  if (!gio.length) { el.innerHTML = '<div class="empty">Giỏ hàng trống!</div>'; return; }
+
+  var tong = 0;
+  var html = '<table><tr><th>Tên</th><th>Giá</th><th>SL</th><th>Tiền</th><th></th></tr>';
+  for (var i = 0; i < gio.length; i++) {
+    var t = gio[i].gia * gio[i].sl;
+    tong += t;
+    html += '<tr>'
+      + '<td>' + gio[i].ten + '</td>'
+      + '<td>' + fmt(gio[i].gia) + '</td>'
+      + '<td>' + gio[i].sl + '</td>'
+      + '<td>' + fmt(t) + '</td>'
+      + '<td><button onclick="xoa(' + i + ')">Xóa</button></td>'
+      + '</tr>';
+  }
+  html += '<tr class="tong-row"><td colspan="3"><b>Tổng cộng</b></td><td colspan="2"><b>' + fmt(tong) + '</b></td></tr>';
+  html += '</table>';
+  html += '<button class="btn-order" onclick="dat()">Đặt hàng</button>';
+  el.innerHTML = html;
+}
+
+function xoa(i) { gio.splice(i, 1); save(); render(); }
+
+function dat() {
+  alert('Đặt hàng thành công!');
+  gio = []; save(); render();
+}
+
+render();
+  </script>
+  <script>
+    const addButtons = document.querySelectorAll('.btn-add-cart');
+
+    addButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // 1. Trích xuất thông tin chi tiết từ thẻ sản phẩm được nhấn
+            const card = button.closest('.product-card');
+            const pName = card.querySelector('.product-name').innerText;
+            const pPrice = card.querySelector('.product-price').innerText;
+            const pImg = card.querySelector('.product-image').innerText;
+            
+            // 2. Nạp đối tượng mới vào mảng dữ liệu trong LocalStorage
+            let currentCart = JSON.parse(localStorage.getItem('full_cart_data')) || [];
+            currentCart.push({ name: pName, price: pPrice, img: pImg });
+            localStorage.setItem('full_cart_data', JSON.stringify(currentCart));
+
+            // 3. Đẩy thông tin số lượng lên thanh menu ngang
+            try {
+                let menuFrame = window.parent.frames['header_menu'] || window.parent.frames[1];
+                if (menuFrame && menuFrame.document) {
+                    const countEl = menuFrame.document.getElementById('cart-count');
+                    if (countEl) {
+                        countEl.innerText = currentCart.length;
+                    }
+                }
+            } catch (e) {
+                console.log("Hệ thống đồng bộ ngầm qua bộ nhớ tạm.");
+            }
+
+            // 4. Hiệu ứng đổi màu nút bấm khi thành công
+            button.innerText = "✓ Đã thêm";
+            button.style.backgroundColor = "#ffc107";
+            button.style.color = "#000";
+            setTimeout(() => {
+                button.innerText = "Thêm vào giỏ";
+                button.style.backgroundColor = "#28a745";
+                button.style.color = "white";
+            }, 800);
+        });
+    });
+</script>
+</body>
+</html>

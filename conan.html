@@ -1,0 +1,74 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Untitled Document</title>
+</head>
+<style>
+.btn-add-cart{
+	background-color:#28a745;
+	color:white;
+	border:none;
+	padding:10px;
+	border-radius:5px;
+	font-size:14px;
+	font-weight:bold;
+	cursor:pointer;
+	transition:background 0.2s;
+	width:100%;
+}
+.btn-add-cart:hover{ background:#218838; }
+</style>
+<body>
+<table>
+<tr>
+<td colspan="2"><img src="Screenshot 2026-05-22 150508.png" width="200" height="200"/></td>
+<td>Thám Tử Lừng Danh Conan - Tập 1 - Bản Nâng Cấp</td>
+<td style="color:#F00">33.000đ<br/>35.000đ -5%</td>
+<td><input type="button" value="Mua Ngay"></td>
+<td><button onclick="them('Conan Tập 1 - Bản Nâng Cấp','33000')" class="btn-add-cart">Thêm vào giỏ</button></td>
+</tr>
+<tr>
+<td colspan="2"><img src="Screenshot 2026-05-22 150818.png" width="200" height="200"/></td>
+<td>Thám Tử Lừng Danh Conan - Tập 105</td>
+<td style="color:#F00">23.500đ<br/>25.000đ -6%</td>
+<td><input type="button" value="Mua Ngay"></td>
+<td><button onclick="them('Conan Tập 105','23500')" class="btn-add-cart">Thêm vào giỏ</button></td>
+</tr>
+<tr>
+<td colspan="2"><img src="Screenshot 2026-05-22 151501.png" width="200" height="200"/></td>
+<td>Thám Tử Lừng Danh Conan - Tập 15 (Tái Bản 2023)</td>
+<td style="color:#F00">23.500đ<br/>25.000đ -6%</td>
+<td><input type="button" value="Mua Ngay"></td>
+<td><button onclick="them('Conan Tập 15 - Tái Bản 2023','23500')" class="btn-add-cart">Thêm vào giỏ</button></td>
+</tr>
+</table>
+<script>
+var buttons=document.querySelectorAll('.btn-add-cart');
+buttons.forEach(function(button){
+  button.addEventListener('click',function(){
+    button.innerText="Đã thêm";
+    button.style.backgroundColor="#ffc107";
+    button.style.color="#000";
+    setTimeout(function(){
+      button.innerText="Thêm vào giỏ";
+      button.style.backgroundColor="#28a745";
+      button.style.color="white";
+    },1000);
+  });
+});
+</script>
+
+<script>
+function them(ten, gia) {
+  var gio = JSON.parse(localStorage.getItem('gio') || '[]');
+  var i = gio.findIndex(function(x){ return x.ten===ten; });
+  if(i>=0) gio[i].sl++;
+  else gio.push({ten:ten, gia:gia, sl:1});
+  localStorage.setItem('gio', JSON.stringify(gio));
+  alert('Đã thêm: ' + ten);
+}
+</script
+<div style="text-align: right; margin-top: 20px;"><a href="trangchunhe.html" style="display: inline-block; padding: 10px 20px; background-color: #2563eb; color: white; text-decoration: none; font-weight: bold; border-radius: 5px; font-family: sans-serif;">🏠 Về trang chủ</a></div>
+</body>
+</html>

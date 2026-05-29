@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Trang Giỏ Hàng</title>
+    <style>
+        /* Đoạn này trang trí một chút cho dễ nhìn, bạn không cần sửa gì cả */
+        body { font-family: Arial, sans-serif; padding: 30px; background-color: #f4f4f4; }
+        .hop-gio-hang { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 400px; }
+        h2 { color: #333; margin-top: 0; }
+        #ten-sp { color: #ff4d4d; font-size: 1.2em; }
+    </style>
+</head>
+<body>
+
+    <div class="hop-gio-hang">
+        <h2>🛒 Giỏ Hàng Của Bạn</h2>
+        <p>Sản phẩm vừa mua: <b id="ten-sp">Chưa có sản phẩm nào!</b></p>
+    </div>
+
+    <script>
+        // Bước A: Lấy cái "đuôi" (link sau dấu hỏi chấm ?) trên thanh địa chỉ trình duyệt
+        const layLink = new URLSearchParams(window.location.search);
+        
+        // Bước B: Tìm xem trong cái đuôi đó có chữ "ten" hay không và lấy giá trị của nó
+        const nhanTenSanPham = layLink.get('ten');
+
+        // Bước C: Nếu tìm thấy tên sản phẩm (tức là người dùng vừa bấm Mua từ trang kia qua)
+        if (nhanTenSanPham) {
+            // Thay thế dòng chữ "Chưa có sản phẩm nào!" thành tên sản phẩm thật
+            document.getElementById('ten-sp').innerText = nhanTenSanPham;
+        }
+    </script>
+
+</body>
+</html>
